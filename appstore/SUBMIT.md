@@ -111,6 +111,8 @@ If anything fails, copy the error from **Console.app** (filter by "SheetScale" o
 
 From `sheetscale/desktop`:
 
+(The signed build reads the profile from `desktop/build/embedded.provisionprofile`, or from the path in the `SHEETSCALE_MAS_PROFILE` environment variable. Neither is ever committed.)
+
     npm run dist:mas
 
 This builds a **universal** (Apple Silicon + Intel) app with Electron's Mac App Store build. It is signed with **Apple Distribution**, wrapped in a `.pkg` signed with **Mac Installer Distribution**, and the `embedded.provisionprofile` from step 5 goes inside it. electron-builder adds the required `com.apple.security.application-groups` entitlement (`<TeamID>.com.andrewpocta.sheetscale`) and `ElectronTeamID` automatically from your certificate. The result is:

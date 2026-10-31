@@ -11,7 +11,7 @@
     "start": "npm run stage && electron .",
     "dist:mac": "npm run stage && electron-builder --mac zip --arm64 --x64 --publish never -c.mac.identity=null",
     "dist:linux": "npm run stage && electron-builder --linux dir --publish never",
-    "dist:mas": "npm run stage && electron-builder --mac mas --universal --publish never",
+    "dist:mas": "npm run stage && node scripts/dist-mas.cjs",
     "dist:mas-dev": "npm run stage && electron-builder --mac mas-dev --arm64 --publish never",
     "dist:mas-unsigned": "npm run stage && electron-builder --mac mas --universal --publish never -c.mas.identity=null -c.mas.provisioningProfile=null"
   },
@@ -39,7 +39,8 @@
       "minimumSystemVersion": "12.0",
       "darkModeSupport": true,
       "extendInfo": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "ElectronTeamID": "64VGCVZKQ2"
       }
     },
     "fileAssociations": [

@@ -10,7 +10,7 @@
   camera, microphone, USB, printing, location, contacts, downloads/pictures folder access.
   The com.apple.security.application-groups entry (TEAMID.com.andrewpocta.sheetscale) that Electron
   needs is added automatically at signing time by @electron/osx-sign (preAutoEntitlements),
-  from the Team ID in the "Apple Distribution" certificate.
+  from the Team ID in the "3rd Party Mac Developer Application" (or "Apple Distribution") certificate. Team ID: 64VGCVZKQ2.
 -->
 <plist version="1.0">
   <dict>
