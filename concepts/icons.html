@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"><script src="icons.js"></script><style>
+body{margin:0;padding:36px 44px;font:13px "Geist",sans-serif;background:#F6F6F8;color:#1D1F24}h1{font-size:18px;margin:0 0 4px}p{color:#61656F;margin:0 0 22px}
+.g{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}.c{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;border-radius:10px;background:#fff;box-shadow:0 0 0 1px #E4E5E9}.c svg{width:24px;height:24px}.c span{font:500 10px "Geist Mono";color:#61656F}
+.logos{display:flex;gap:28px;margin-top:28px;align-items:center}.logos div{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;color:#61656F}</style></head><body>
+<h1>PlanMark icon set v2 and app-icon options</h1><p>Original artwork: 24px grid, 1.6px stroke, round caps. One family, used by all three concepts.</p><div class="g" id="g"></div>
+<div class="logos" id="l"></div>
+<script>document.getElementById('g').innerHTML=Object.entries(IC).map(([k,v])=>`<div class="c">${v}<span>${k}</span></div>`).join('');
+document.getElementById('l').innerHTML=[['#8B7CFF','#2DD4BF','A · Studio Pro'],['#3DBE93','#0D4F40','B · Clean Desk'],['#FF8A4C','#B93A0B','C · Field Focus']].map(([a,b,n])=>`<div>${LOGO(96,a,b)}${n}</div>`).join('')+`<div>${LOGO(32,'#3DBE93','#0D4F40')}${LOGO(16,'#3DBE93','#0D4F40')}small sizes</div>`;</script></body></html>

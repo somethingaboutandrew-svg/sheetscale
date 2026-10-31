@@ -1,0 +1,169 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>PlanMark: Concept A, Studio Pro</title>
+<script src="icons.js"></script><script src="scene-data.js"></script><script src="plan.js"></script><script src="ui.js"></script>
+<style>
+/* Studio Pro: graphite surfaces, one electric accent, frosted floating chrome. */
+:root[data-theme=dark]{--bg:#0B0C0F;--grid:rgba(255,255,255,.035);--s1:rgba(22,23,28,.78);--s1solid:#16171C;--s2:#1E2027;--s3:#272A33;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);--tx:#ECEDF1;--tx2:#A1A4B0;--tx3:#6B6F7C;--ac:#8B7CFF;--ac2:#B4AAFF;--acbg:rgba(139,124,255,.16);--ms:#2DD4BF;--msbg:rgba(45,212,191,.12);--sel:#8B7CFF;--shadow:0 12px 40px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.06);--sheetsh:0 30px 80px rgba(0,0,0,.6);}
+:root[data-theme=light]{--bg:#ECEDF1;--grid:rgba(20,22,30,.05);--s1:rgba(255,255,255,.78);--s1solid:#fff;--s2:#F4F5F8;--s3:#E7E9EF;--line:rgba(16,18,27,.08);--line2:rgba(16,18,27,.14);--tx:#14161D;--tx2:#5A5F6E;--tx3:#8B90A0;--ac:#6B58F5;--ac2:#5443D8;--acbg:rgba(107,88,245,.12);--ms:#0E9F8E;--msbg:rgba(14,159,142,.1);--sel:#6B58F5;--shadow:0 10px 30px rgba(20,22,40,.12),0 0 0 1px rgba(16,18,27,.06);--sheetsh:0 20px 60px rgba(20,22,40,.18);}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--tx);font:13px/1.4 Geist,"SF Pro Text",-apple-system,"Segoe UI Variable",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+svg{display:block}
+kbd{font:500 10.5px/1 "Geist Mono",ui-monospace,monospace;padding:3px 5px;border-radius:5px;background:var(--s3);color:var(--tx2);border:1px solid var(--line)}
+.glass{background:var(--s1);backdrop-filter:blur(22px) saturate(1.4);-webkit-backdrop-filter:blur(22px) saturate(1.4);box-shadow:var(--shadow);border-radius:14px}
+/* title bar */
+.titlebar{position:absolute;inset:0 0 auto 0;height:44px;display:flex;align-items:center;gap:10px;padding:0 12px 0 14px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(20px);z-index:5}
+.lights{display:flex;gap:8px;margin-right:8px}.lights i{width:12px;height:12px;border-radius:50%;background:#FF5F57}.lights i:nth-child(2){background:#FEBC2E}.lights i:nth-child(3){background:#28C840}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:-.01em}
+.tabs{display:flex;gap:4px;margin-left:10px}
+.tab{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 12px;border-radius:8px;color:var(--tx2);font-size:12.5px}
+.tab.on{background:var(--s2);color:var(--tx);box-shadow:inset 0 0 0 1px var(--line)}
+.tab svg{width:14px;height:14px;opacity:.6}
+.tab .dirty{width:6px;height:6px;border-radius:50%;background:var(--ac)}
+.sp{flex:1}
+.scalechip{display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-radius:999px;background:var(--msbg);color:var(--ms);font-weight:600;font-size:12.5px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ms) 35%,transparent)}
+.scalechip svg{width:16px;height:16px}.scalechip small{color:var(--tx2);font-weight:500}
+.ib{width:30px;height:30px;display:inline-grid;place-items:center;border-radius:8px;color:var(--tx2);transition:background .12s,color .12s}
+.ib:hover{background:var(--s2);color:var(--tx)}.ib svg{width:17px;height:17px}.ib.sm{width:24px;height:24px}.ib.sm svg{width:15px;height:15px}
+.ib.off,.ib.faint{color:var(--tx3)}
+.btn{height:30px;padding:0 12px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;font-weight:550;font-size:12.5px;background:var(--s2);box-shadow:inset 0 0 0 1px var(--line)}
+.btn svg{width:15px;height:15px}
+.btn.pri{background:var(--ac);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.2) inset,0 4px 14px color-mix(in srgb,var(--ac) 40%,transparent)}
+.btn.ghost{background:transparent}
+.local{display:flex;align-items:center;gap:6px;color:var(--tx3);font-size:11.5px;margin-right:4px}.local svg{width:14px;height:14px;color:var(--ms)}
+/* canvas */
+.canvas{position:absolute;inset:44px 0 0 0;background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:18px 18px;display:grid;place-items:center}
+.sheet{position:relative;width:820px;aspect-ratio:1224/792;box-shadow:var(--sheetsh);border-radius:2px;margin-right:250px;margin-top:-10px}
+.sheet img{width:100%;height:100%;display:block;border-radius:2px}.sheet svg{position:absolute;inset:0;width:100%;height:100%}
+.mtip{position:absolute;transform:translate(10px,-50%);background:var(--s1solid);color:var(--tx);padding:6px 9px;border-radius:9px;font:600 12px/1.25 Geist;white-space:nowrap;box-shadow:var(--shadow)}
+.mtip small{display:block;color:var(--tx2);font-weight:500}
+/* tool rail */
+.rail{position:absolute;left:14px;top:50%;transform:translateY(-46%);width:48px;padding:6px;display:flex;flex-direction:column;gap:2px;z-index:4}
+.tool{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;color:var(--tx2);position:relative;transition:background .1s,color .1s,transform .1s}
+.tool:hover{background:var(--s2);color:var(--tx)}.tool:active{transform:scale(.94)}
+.tool svg{width:19px;height:19px}
+.tool.on{background:var(--acbg);color:var(--ac2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 45%,transparent)}
+.tool.flyout::after{content:"";position:absolute;right:4px;bottom:4px;border:3px solid transparent;border-right-color:currentColor;border-bottom-color:currentColor;opacity:.45}
+.rail .grp{font:600 8.5px/1 Geist;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);text-align:center;margin:8px 0 4px}
+.rail .grp.ms{color:var(--ms)}
+.rail .mtool{color:color-mix(in srgb,var(--ms) 75%,var(--tx2))}
+.rail hr{border:0;height:1px;background:var(--line);margin:4px 4px}
+.tt{position:absolute;left:52px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:10px;white-space:nowrap;padding:7px 8px 7px 11px;border-radius:9px;background:var(--s1solid);color:var(--tx);font-weight:550;font-size:12px;box-shadow:var(--shadow);pointer-events:none}
+.tt small{color:var(--tx2);font-weight:450;display:block;font-size:11px}
+/* pages + status */
+.pagesbox{position:absolute;left:76px;bottom:14px;display:flex;align-items:center;gap:8px;padding:6px}
+.pg{width:64px;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px var(--line2)}.pg img{width:100%;display:block}
+.pg.on{box-shadow:0 0 0 2px var(--ac)}
+.pagesbox .pn{font:500 11.5px "Geist Mono";color:var(--tx2);padding:0 6px}
+.status{position:absolute;left:calc(50% - 125px);bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:4px;font:500 12px "Geist Mono",monospace;color:var(--tx2)}
+.status .zv{min-width:52px;text-align:center;color:var(--tx)}.status .div{width:1px;height:18px;background:var(--line);margin:0 4px}
+.status .coord{padding:0 8px}.status .snap{display:flex;align-items:center;gap:6px;padding:0 10px;height:30px;border-radius:8px;color:var(--ms);background:var(--msbg);font-family:Geist;font-weight:600}
+.status .snap svg{width:15px;height:15px}
+/* right panel */
+.panel{position:absolute;right:12px;top:56px;bottom:12px;width:300px;display:flex;flex-direction:column;overflow:hidden;z-index:4}
+.ptabs{display:flex;gap:2px;margin:8px;padding:3px;border-radius:10px;background:var(--s2)}
+.ptabs button{flex:1;height:28px;border-radius:7px;font-weight:550;font-size:12px;color:var(--tx2);display:flex;align-items:center;justify-content:center;gap:6px}
+.ptabs button svg{width:14px;height:14px}
+.ptabs button.on{background:var(--s1solid);color:var(--tx);box-shadow:0 1px 3px rgba(0,0,0,.25),0 0 0 1px var(--line)}
+.pbody{flex:1;overflow:auto;padding:4px 14px 14px}
+.ph{display:flex;align-items:center;gap:10px;padding:6px 0 12px}
+.ph-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 18%,transparent)}
+:root[data-theme=dark] .ph-ic{color:#4ADE80}.ph-ic svg{width:19px;height:19px}
+.ph-t{font-weight:650;font-size:14px}.ph-s{color:var(--tx2);font-size:11.5px}.ph .ib{margin-left:auto}
+.measure{border-radius:12px;padding:12px 12px 10px;background:linear-gradient(160deg,var(--msbg),transparent 120%);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ms) 30%,transparent)}
+.m-main{display:flex;align-items:baseline;gap:6px}.m-v{font:600 26px/1.1 Geist;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.m-u{color:var(--tx2);font-weight:550}
+.m-sub{display:flex;gap:8px;align-items:center;color:var(--tx2);margin-top:4px;font-variant-numeric:tabular-nums}.m-sub b{color:var(--tx);font-weight:600}
+.dotsep{width:3px;height:3px;border-radius:50%;background:var(--tx3)}
+.m-scale{display:flex;align-items:center;gap:6px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line2);font-size:11.5px;color:var(--ms)}.m-scale svg{width:14px;height:14px}
+.link{margin-left:auto;color:var(--ac2);font-weight:600;font-size:11.5px}
+section{padding:12px 0 4px;border-bottom:1px solid var(--line)}section:last-of-type{border:0}
+h4{margin:0 0 10px;font:600 10.5px/1 Geist;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);display:flex;align-items:center;justify-content:space-between}
+h4 .cap{text-transform:none;letter-spacing:0;font-weight:500}
+.swatches{display:flex;gap:6px;margin-bottom:10px}
+.sw{width:24px;height:24px;border-radius:7px;background:var(--c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 0 0 1px rgba(0,0,0,.2);transition:transform .1s}
+.sw:hover{transform:scale(1.08)}
+.sw.on{box-shadow:0 0 0 2px var(--s1solid),0 0 0 4px var(--c)}
+.sw.custom{background:conic-gradient(#E5484D,#FFB224,#30A46C,#0090FF,#7C3AED,#E5484D)}
+.field{display:flex;align-items:center;gap:10px;margin:8px 0}.field>label{width:52px;color:var(--tx2);font-size:12px;flex:none}
+.slider{flex:1;display:flex;align-items:center;gap:10px}.track{flex:1;height:6px;border-radius:3px;background:var(--s3);position:relative}
+.fillbar{position:absolute;inset:0 auto 0 0;width:var(--v);border-radius:3px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 30%,transparent),var(--c))}
+.knob{position:absolute;left:var(--v);top:50%;width:16px;height:16px;border-radius:50%;background:#fff;transform:translate(-50%,-50%);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+output{font:500 11.5px "Geist Mono";min-width:40px;text-align:center;padding:4px 0;border-radius:6px;background:var(--s2);color:var(--tx)}
+.seg{flex:1;display:flex;padding:2px;border-radius:9px;background:var(--s2);gap:2px}
+.seg button{flex:1;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--tx2)}
+.seg button.on{background:var(--s1solid);color:var(--tx);box-shadow:0 1px 3px rgba(0,0,0,.25),0 0 0 1px var(--line)}
+.seg.dashes svg{width:40px;height:12px}
+.seg.widths button{display:flex;flex-direction:column;gap:0;height:34px}.seg.widths svg{width:26px;height:12px}.seg.widths span{font:500 9.5px "Geist Mono";color:var(--tx3)}
+.seg.txt button{font-size:11.5px;font-weight:550}
+.toggle{width:30px;height:18px;border-radius:9px;background:var(--s3);position:relative}.toggle.on{background:var(--ac)}.toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .12s}.toggle.on i{transform:translateX(12px)}
+.num{display:flex;align-items:center;background:var(--s2);border-radius:8px;height:30px}.num button{width:28px;height:30px;color:var(--tx2)}.num span{min-width:50px;text-align:center;font:500 12px "Geist Mono"}
+.select,.input{flex:1;height:30px;border-radius:8px;background:var(--s2);box-shadow:inset 0 0 0 1px var(--line);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:12.5px}
+.select svg{width:14px;height:14px;margin-left:auto;color:var(--tx3)}.input.muted{color:var(--tx2)}
+.ldot{width:10px;height:10px;border-radius:3px;background:var(--c);flex:none}
+.pf{display:flex;gap:6px;padding-top:12px}.pf .btn{flex:1;justify-content:center;font-size:12px}
+.lrow{display:flex;align-items:center;gap:10px;height:36px;padding:0 6px 0 10px;border-radius:9px}.lrow:hover{background:var(--s2)}
+.lrow.on{background:var(--acbg);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 35%,transparent)}
+.ln{flex:1}.lk{font:500 11px "Geist Mono";color:var(--tx3);background:var(--s2);padding:2px 6px;border-radius:5px}
+.lchk{width:16px;height:16px;border-radius:5px;display:grid;place-items:center;background:var(--ac);color:#fff}.lchk svg{width:12px;height:12px}
+.mfilter{display:flex;gap:6px;margin:4px 0 8px}.search{flex:1;height:30px;border-radius:8px;background:var(--s2);display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--tx3)}.search svg{width:15px;height:15px}
+.mrow{display:flex;align-items:center;gap:10px;padding:8px;border-radius:9px}.mrow:hover{background:var(--s2)}.mrow.on{background:var(--acbg)}
+.mic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent)}.mic svg{width:16px;height:16px}
+:root[data-theme=dark] .mic{filter:brightness(1.5)}
+.mt{flex:1;min-width:0}.mt b{display:block;font-weight:600;font-size:12.5px}.mt small{display:block;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mv{text-align:right;font:500 12px "Geist Mono";font-variant-numeric:tabular-nums}.mv small{display:block;color:var(--tx2)}
+.totals{margin-top:10px;padding:12px;border-radius:12px;background:var(--s2)}.totals h4{margin-bottom:8px}.totals div{display:flex;justify-content:space-between;padding:3px 0;color:var(--tx2)}.totals b{color:var(--tx);font:600 12.5px "Geist Mono"}.totals b small{color:var(--tx2);font-weight:500;margin-left:4px}
+.split{display:flex;flex-direction:column;gap:6px}
+/* start */
+.start{position:absolute;inset:44px 0 0 0;display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:56px 72px;background:radial-gradient(900px 500px at 20% 0%,color-mix(in srgb,var(--ac) 18%,transparent),transparent 60%),radial-gradient(700px 400px at 100% 100%,color-mix(in srgb,var(--ms) 12%,transparent),transparent 60%)}
+.hero h1{font:650 40px/1.08 Geist;letter-spacing:-.03em;margin:18px 0 10px}.hero p{color:var(--tx2);font-size:15px;max-width:440px;margin:0 0 26px}
+.drop{border-radius:18px;border:1.5px dashed var(--line2);padding:30px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;background:color-mix(in srgb,var(--s2) 50%,transparent)}
+.drop .dic{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:var(--acbg);color:var(--ac2)}.drop .dic svg{width:28px;height:28px}
+.drop b{font-size:15px}.drop span{color:var(--tx2)}
+.qa{display:flex;gap:8px;margin-top:16px}.qa .btn{height:36px;padding:0 14px}
+.recent h3{font:600 12px Geist;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);margin:6px 0 14px;display:flex;justify-content:space-between}
+.rc{display:flex;gap:14px;align-items:center;padding:10px;border-radius:14px;margin-bottom:6px}.rc:hover,.rc.hl{background:var(--s1);box-shadow:var(--shadow)}
+.rc img{width:92px;height:60px;object-fit:cover;object-position:left top;border-radius:7px;box-shadow:0 0 0 1px var(--line2);background:#fff}
+.rc b{display:block;font-weight:600;margin-bottom:3px}.rc span{color:var(--tx2);font-size:12px}
+.foot{position:absolute;left:72px;right:72px;bottom:22px;display:flex;justify-content:space-between;color:var(--tx3);font-size:12px}.foot .local{color:var(--tx2)}
+.kb{display:flex;gap:16px}.kb span{display:flex;gap:6px;align-items:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+<header class="titlebar">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="brand"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="sp"></div>
+  <div id="tbright" style="display:flex;align-items:center;gap:6px"></div>
+</header>
+<div id="root"></div>
+<script>
+const I = IC, v = Q.get('view') || 'main', dark = document.documentElement.dataset.theme === 'dark';
+document.querySelector('.brand').innerHTML = LOGO(22, '#8B7CFF', '#2DD4BF');
+if (v === 'start') {
+  document.getElementById('tabs').innerHTML = '';
+  document.getElementById('tbright').innerHTML = `<span class="local">${I.shield}Files stay on this Mac</span><button class="ib" title="Theme">${dark ? I.sun : I.moon}</button>`;
+  document.getElementById('root').innerHTML = `<div class="start">
+    <div class="hero">${LOGO(52, '#8B7CFF', '#2DD4BF')}<h1>Mark up and measure<br>plan sheets.</h1><p>Calibrate any sheet, trace wetland boundaries, buffers and streams, and get square feet and acres right on the page.</p>
+      <div class="drop"><div class="dic">${I.drop}</div><b>Drop PDFs or images here</b><span>PDF, PNG, JPG and TIFF. Nothing is uploaded.</span>
+        <div class="qa"><button class="btn pri">${I.open}Open file… <kbd style="background:rgba(255,255,255,.2);color:#fff;border:0">⌘O</kbd></button><button class="btn">${I.combine}Combine</button><button class="btn">${I.image}Images to PDF</button></div></div></div>
+    <div class="recent"><h3>Recent <span style="letter-spacing:0;text-transform:none;font-weight:500">Clear</span></h3>
+      ${UI.recent().map(([n, m, t], i) => `<div class="rc${i === 0 ? ' hl' : ''}"><img src="${t}" alt=""><div><b>${n}</b><span>${m}</span></div></div>`).join('')}</div>
+    <div class="foot"><span class="local">${I.shield}Everything runs on this device. No account, no upload.</span><span class="kb"><span>${UI.kbd('⌘ K')} Commands</span><span>${UI.kbd('?')} Shortcuts</span></span></div></div>`;
+} else {
+  document.getElementById('tabs').innerHTML = `<div class="tab on">${I.file}W-1 Riverbend Commons.pdf<span class="dirty"></span></div><div class="tab">${I.file}W-2 Buffer Plan.pdf</div><button class="ib sm" title="New tab">${I.plus}</button>`;
+  document.getElementById('tbright').innerHTML = `<div class="scalechip" title="Page 1 scale. Click to change or recalibrate.">${I.scale}1″ = 50′<small>calibrated</small></div><span style="width:6px"></span><button class="ib" title="Undo ⌘Z">${I.undo}</button><button class="ib" title="Redo ⇧⌘Z">${I.redo}</button><span style="width:6px"></span><button class="btn">${I.export}Export</button><button class="btn pri">${I.save}Save</button>`;
+  const tools = (ids, cls = '') => ids.map(([id, f]) => `<button class="tool ${cls}${f ? ' flyout' : ''}${id === 'select' ? ' on' : ''}" data-t="${id}" aria-label="${id}">${I[id]}</button>`).join('');
+  const panel = v === 'panel'
+    ? `<div class="ptabs"><button>${I.sliders}Properties</button><button class="on">${I.layers}Layers</button><button>${I.list}Markups</button></div><div class="pbody"><div class="split">${UI.layers()}</div><section style="border-top:1px solid var(--line);margin-top:6px"><h4>Markups</h4>${UI.markups()}</section></div>`
+    : `<div class="ptabs"><button class="on">${I.sliders}Properties</button><button>${I.layers}Layers</button><button>${I.list}Markups</button></div><div class="pbody">${UI.props()}</div>`;
+  document.getElementById('root').innerHTML = `<div class="canvas">${planSheet({ tip: v === 'main' ? '16,579.04 sq ft<small>0.381 ac · perimeter 504.05 ft</small>' : '' })}</div>
+    <nav class="rail glass" aria-label="Tools">${tools([['select'], ['pan']])}<div class="grp">Markup</div>${tools([['pen'], ['arrow', 1], ['rect', 1], ['cloud'], ['callout', 1], ['highlight']])}<div class="grp ms">Measure</div>${tools([['calibrate'], ['m-length'], ['m-polylength'], ['m-area'], ['m-perimeter'], ['m-count']], 'mtool')}</nav>
+    <div class="pagesbox glass"><div class="pg on"><img src="thumb.png" alt="Page 1"></div><div class="pg"><img src="thumb2.png" alt="Page 2"></div><span class="pn">1 / 2</span></div>
+    <div class="status glass"><button class="ib">${I.minus}</button><span class="zv">86%</span><button class="ib">${I.plus}</button><button class="ib" title="Fit page">${I.fitp}</button><span class="div"></span><span class="coord">x 412.6′  y 218.4′</span><span class="div"></span><span class="snap">${I.magnet}Snap</span></div>
+    <aside class="panel glass">${panel}</aside>`;
+  if (v === 'main') {
+    const a = document.querySelector('[data-t="m-area"]');
+    a.insertAdjacentHTML('beforeend', `<span class="tt"><span>Area<small>Click points, double-click to close</small></span>${UI.kbd('4')}</span>`);
+    a.classList.add('hover'); a.style.background = 'var(--s2)'; a.style.color = 'var(--tx)';
+  }
+}
+</script></body></html>

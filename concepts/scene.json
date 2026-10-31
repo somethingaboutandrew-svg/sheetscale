@@ -1,0 +1,321 @@
+{
+ "ring": null,
+ "layers": [
+  {
+   "id": "markups",
+   "name": "Markups",
+   "visible": true
+  },
+  {
+   "id": "an1thx7066c4",
+   "name": "Wetland Delineation",
+   "visible": true
+  },
+  {
+   "id": "psmuskug66iw",
+   "name": "Review Comments",
+   "visible": true
+  }
+ ],
+ "sel": [
+  "jgk06t1e66e9"
+ ],
+ "markups": [
+  {
+   "id": "jgk06t1e66e9",
+   "type": "m-area",
+   "layer": "an1thx7066c4",
+   "pts": [
+    [
+     379.99998256138394,
+     299.99997172116315
+    ],
+    [
+     426.2400293534327,
+     349.7600104725959
+    ],
+    [
+     478.71998814174106,
+     384.8799949852196
+    ],
+    [
+     534.0799895179778,
+     405.12001184883263
+    ],
+    [
+     588.9600198517435,
+     410.2400034311655
+    ],
+    [
+     639.9999934016047,
+     399.99998421098275
+    ],
+    [
+     672.0312820493484,
+     371.25
+    ],
+    [
+     678.7500113115348,
+     334.99999952868603
+    ],
+    [
+     661.0937688525579,
+     298.7499990573721
+    ],
+    [
+     619.9999981147442,
+     269.9999787908723
+    ],
+    [
+     554.374991045035,
+     249.3749971721163
+    ],
+    [
+     484.9999938729187,
+     247.4999660653957
+    ],
+    [
+     423.12497690561656,
+     264.37502969277875
+    ]
+   ],
+   "style": {
+    "stroke": "#15803d",
+    "fill": "#22c55e",
+    "opacity": 1,
+    "fillOpacity": 0.25,
+    "width": 1.5,
+    "dash": "solid",
+    "startHead": "none",
+    "endHead": "none",
+    "fontSize": 10,
+    "textColor": "#c81e1e"
+   },
+   "meas": {
+    "kind": "area",
+    "value": 16579.040168831747,
+    "unit": "sq ft",
+    "area2": 0.38060239138732205,
+    "area2Unit": "ac",
+    "perimeter": 504.05409376890196,
+    "text": "16,579.04 sq ft (0.381 ac)"
+   }
+  },
+  {
+   "id": "elgc5ii566ei",
+   "type": "m-count",
+   "layer": "an1thx7066c4",
+   "pts": [
+    [
+     395.00001508204633,
+     317.9999674793376
+    ],
+    [
+     470.0000334632903,
+     391.99998609623856
+    ],
+    [
+     600.0000028278837,
+     418.0000160246742
+    ],
+    [
+     667.9999868032095,
+     351.9999955225175
+    ],
+    [
+     610.0000004713139,
+     267.99997926218634
+    ],
+    [
+     470.0000334632903,
+     245.9999844466397
+    ]
+   ],
+   "style": {
+    "stroke": "#ea580c",
+    "fill": "#ea580c",
+    "opacity": 1,
+    "fillOpacity": 0.3,
+    "width": 1.5,
+    "dash": "solid",
+    "startHead": "none",
+    "endHead": "none",
+    "fontSize": 10,
+    "textColor": "#c81e1e"
+   },
+   "meas": {
+    "kind": "count",
+    "value": 6,
+    "unit": "ea",
+    "text": "6"
+   }
+  },
+  {
+   "id": "7pg5ob1b66gd",
+   "type": "m-polylength",
+   "layer": "an1thx7066c4",
+   "pts": [
+    [
+     59.99998586058157,
+     299.99997172116315
+    ],
+    [
+     140.00000306354067,
+     336.0000353485461
+    ],
+    [
+     219.99998421098275,
+     334.00003581986005
+    ],
+    [
+     300.00000141394185,
+     289.9999740777329
+    ],
+    [
+     379.99998256138394,
+     299.99997172116315
+    ]
+   ],
+   "style": {
+    "stroke": "#1d4ed8",
+    "fill": null,
+    "opacity": 1,
+    "fillOpacity": 0.3,
+    "width": 1.5,
+    "dash": "solid",
+    "startHead": "none",
+    "endHead": "none",
+    "fontSize": 10,
+    "textColor": "#c81e1e"
+   },
+   "meas": {
+    "kind": "length",
+    "value": 235.88604769156063,
+    "unit": "ft",
+    "text": "235.89 ft"
+   }
+  },
+  {
+   "id": "cedej9wq66gr",
+   "type": "m-length",
+   "layer": "an1thx7066c4",
+   "pts": [
+    [
+     540.0000169673021,
+     418.0000160246742
+    ],
+    [
+     540.0000169673021,
+     588.0000120185057
+    ]
+   ],
+   "style": {
+    "stroke": "#1d4ed8",
+    "fill": null,
+    "opacity": 1,
+    "fillOpacity": 0.3,
+    "width": 1.2,
+    "dash": "solid",
+    "startHead": "closed",
+    "endHead": "closed",
+    "fontSize": 10,
+    "textColor": "#c81e1e"
+   },
+   "meas": {
+    "kind": "length",
+    "value": 118.05546235656676,
+    "unit": "ft",
+    "text": "118.06 ft"
+   }
+  },
+  {
+   "id": "ke7jg5tq66je",
+   "type": "cloud",
+   "layer": "psmuskug66iw",
+   "pts": [
+    [
+     649.999991045035,
+     329.9999646514539
+    ],
+    [
+     699.9999792621863,
+     374.9999901024071
+    ]
+   ],
+   "style": {
+    "stroke": "#e11d48",
+    "fill": null,
+    "opacity": 1,
+    "fillOpacity": 0.3,
+    "width": 1.5,
+    "dash": "cloud",
+    "startHead": "none",
+    "endHead": "none",
+    "fontSize": 12,
+    "textColor": "#c81e1e"
+   },
+   "meas": null
+  },
+  {
+   "id": "si5l0jel66jt",
+   "type": "callout",
+   "layer": "psmuskug66iw",
+   "pts": [
+    [
+     735.0000070697092,
+     519.999991987663
+    ],
+    [
+     875.0000070697092,
+     483.99999198766295
+    ],
+    [
+     689.999981618756,
+     364.9999924589768
+    ]
+   ],
+   "style": {
+    "stroke": "#e11d48",
+    "fill": "#ffffff",
+    "opacity": 1,
+    "fillOpacity": 1,
+    "width": 1,
+    "dash": "solid",
+    "startHead": "none",
+    "endHead": "closed",
+    "fontSize": 12,
+    "textColor": "#c81e1e"
+   },
+   "text": "Confirm WL-4 flag location in field; boundary may extend east.",
+   "meas": null
+  },
+  {
+   "id": "0rjqurt066mb",
+   "type": "highlight",
+   "layer": "psmuskug66iw",
+   "pts": [
+    [
+     940.0000669265806,
+     600.000009190622
+    ],
+    [
+     1000.0000527871622,
+     620.0000044774824
+    ]
+   ],
+   "style": {
+    "stroke": "#facc15",
+    "fill": "#fde047",
+    "opacity": 1,
+    "fillOpacity": 0.45,
+    "width": 0,
+    "dash": "solid",
+    "startHead": "none",
+    "endHead": "none",
+    "fontSize": 12,
+    "textColor": "#c81e1e"
+   },
+   "meas": null
+  }
+ ]
+}
