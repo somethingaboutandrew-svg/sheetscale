@@ -1,0 +1,56 @@
+{
+  "name": "planmark-desktop",
+  "productName": "PlanMark",
+  "version": "1.0.0",
+  "description": "PlanMark - private PDF markup and measurement (desktop)",
+  "author": "Andrew Pocta",
+  "license": "MIT",
+  "main": "main.cjs",
+  "scripts": {
+    "stage": "rm -rf app && cp -r ../dist app",
+    "start": "npm run stage && electron .",
+    "dist:mac": "npm run stage && electron-builder --mac zip --arm64 --x64 --publish never",
+    "dist:linux": "npm run stage && electron-builder --linux dir --publish never"
+  },
+  "build": {
+    "appId": "com.andrewpocta.planmark",
+    "productName": "PlanMark",
+    "copyright": "Copyright 2026 Andrew Pocta",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "app/**",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "artifactName": "PlanMark-${version}-mac-${arch}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "PDF Document",
+        "role": "Editor",
+        "rank": "Alternate",
+        "mimeType": "application/pdf"
+      }
+    ],
+    "linux": {
+      "target": "dir",
+      "icon": "build/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  }
+}

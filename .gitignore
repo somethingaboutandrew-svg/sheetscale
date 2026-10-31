@@ -5,3 +5,6 @@ playwright-report/
 public/pdfjs/
 public/qpdf/qpdf.js
 public/qpdf/qpdf.wasm
+desktop/node_modules/
+desktop/release/
+desktop/app/

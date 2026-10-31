@@ -47,7 +47,21 @@ async function busy<T>(msg: string, fn: () => Promise<T>): Promise<T> {
     el.remove();
   }
 }
+// Desktop (Electron) bridge, present only in the Mac app.
+interface NativeBridge {
+  saveFile(name: string, bytes: Uint8Array): Promise<string | null>;
+  onOpenFiles(cb: (files: { name: string; bytes: Uint8Array }[]) => void): void;
+  onCommand(cb: (cmd: string) => void): void;
+  ready(): void;
+}
+const native = (window as any).planmarkNative as NativeBridge | undefined;
+async function nativeSave(bytes: Uint8Array, name: string) {
+  const path = await native!.saveFile(name, bytes);
+  if (path) toast(`Saved ${fmtBytes(bytes.length)} to ${path}`, 4000);
+  return path;
+}
 function download(bytes: Uint8Array, name: string) {
+  if (native) { void nativeSave(bytes, name); return; }
   const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: name.endsWith('.csv') ? 'text/csv' : 'application/pdf' }));
   const a = document.createElement('a');
   a.href = url;
@@ -58,6 +72,7 @@ function download(bytes: Uint8Array, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 async function saveBytes(bytes: Uint8Array, name: string, pick: boolean) {
+  if (native) { await nativeSave(bytes, name); return; }
   const w = window as any;
   if (pick && w.showSaveFilePicker) {
     try {
@@ -1809,7 +1824,7 @@ async function quickSave() {
   const name = doc.name.replace(/\.pdf$/i, '') + '.pdf';
   const out = await busy('Saving…', () => buildExport(false));
   await saveBytes(out.bytes, name, false);
-  toast(`Saved ${name} (${fmtBytes(out.bytes.length)}) with editable markups`);
+  if (!native) toast(`Saved ${name} (${fmtBytes(out.bytes.length)}) with editable markups`);
 }
 
 function openExportDialog() {
@@ -1848,7 +1863,7 @@ function openExportDialog() {
       } catch (err) { toast(`Size reduction skipped: ${(err as Error).message}`); }
     }
     await saveBytes(bytes, name, pick);
-    toast(`Saved ${name} — ${fmtBytes(bytes.length)}${reduce ? ` (was ${fmtBytes(before)})` : ''}`);
+    if (!native) toast(`Saved ${name} — ${fmtBytes(bytes.length)}${reduce ? ` (was ${fmtBytes(before)})` : ''}`);
   });
 }
 
@@ -2036,8 +2051,33 @@ setTool('select');
     await activate(null);
   }
   document.body.dataset.ready = '1';
+  native?.ready();
 })();
-if ('serviceWorker' in navigator && import.meta.env.PROD && !/[?&]nosw\b/.test(location.search)) {
+if (native) {
+  native.onOpenFiles((files) => openFiles(files.map((f) => new File([f.bytes as BlobPart], f.name, { type: /\.pdf$/i.test(f.name) ? 'application/pdf' : '' }))));
+  native.onCommand((cmd) => {
+    const ae = document.activeElement as HTMLElement | null;
+    const inField = !!ae && (ae.matches('input, textarea, select') || ae.isContentEditable);
+    const key = (k: string, extra: KeyboardEventInit = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, ...extra }));
+    switch (cmd) {
+      case 'save': quickSave(); break;
+      case 'save-as': openExportDialog(); break;
+      case 'combine': openCombineDialog(); break;
+      case 'reduce': openReduceDialog(); break;
+      case 'undo': inField ? document.execCommand('undo') : undo(); break;
+      case 'redo': inField ? document.execCommand('redo') : redo(); break;
+      case 'copy': inField ? document.execCommand('copy') : key('c'); break;
+      case 'cut': inField ? document.execCommand('cut') : (key('c'), deleteSelection()); break;
+      case 'paste': inField ? document.execCommand('paste') : key('v'); break;
+      case 'select-all': inField ? document.execCommand('selectAll') : key('a'); break;
+      case 'zoom-in': setZoom(zoom * 1.25); break;
+      case 'zoom-out': setZoom(zoom / 1.25); break;
+      case 'fit-width': fitWidth(); break;
+      case 'fit-page': fitPage(); break;
+    }
+  });
+}
+if (!native && 'serviceWorker' in navigator && import.meta.env.PROD && !/[?&]nosw\b/.test(location.search)) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 // unused import guards
