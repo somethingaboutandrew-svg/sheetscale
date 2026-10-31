@@ -8,6 +8,8 @@ test('theme: light glass by default (even on a dark system); Appearance menu off
   expect(await theme()).toBe('light'); // default is light glass, whatever the system says
   // frosted side panels: translucent fill + backdrop blur; nothing over the pages is blurred
   await open(page, 'sample.pdf');
+  // opening fits the zoom, and the blur pauses during zoom by design; wait for it to settle
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.querySelector('aside.right')!).backdropFilter)).toContain('blur');
   const css = await page.evaluate(() => {
     const f = (sel: string) => { const s = getComputedStyle(document.querySelector(sel)!); return { bf: s.backdropFilter, bg: s.backgroundColor }; };
     return { right: f('aside.right'), rail: f('#toolbar'), status: f('#statusbar'), viewer: f('#viewer'), tip: f('#tip') };

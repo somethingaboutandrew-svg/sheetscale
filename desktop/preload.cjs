@@ -1,4 +1,4 @@
-// Minimal, explicit bridge between the PlanMark page and the desktop shell.
+// Minimal, explicit bridge between the SheetScale page and the desktop shell.
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('planmarkNative', {
   saveFile: (name, bytes) => ipcRenderer.invoke('save-file', String(name), bytes),

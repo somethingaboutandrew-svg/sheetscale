@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- PlanMark - entitlements for every helper executable, framework and dylib inside the bundle.
+<!-- SheetScale - entitlements for every helper executable, framework and dylib inside the bundle.
      Helpers inherit the main app's sandbox; they get nothing of their own. -->
 <plist version="1.0">
   <dict>

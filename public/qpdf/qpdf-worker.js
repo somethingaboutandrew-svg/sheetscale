@@ -1,4 +1,4 @@
-/* PlanMark qpdf worker. Runs qpdf (WebAssembly) entirely inside the browser. */
+/* SheetScale qpdf worker. Runs qpdf (WebAssembly) entirely inside the browser. */
 importScripts('qpdf.js');
 self.onmessage = async (e) => {
   const { id, input, args, back } = e.data;

@@ -1,5 +1,5 @@
 // Builds the Acknowledgements page (public/licenses.html) and THIRD_PARTY_LICENSES.txt from the
-// license texts of every third-party component that ships inside PlanMark (web app and desktop app).
+// license texts of every third-party component that ships inside SheetScale (web app and desktop app).
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 const root = new URL('../', import.meta.url).pathname;
 const nm = `${root}node_modules/`;
@@ -21,7 +21,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.`;
 const APACHE = read(`${nm}pdfjs-dist/LICENSE`);
 
-// [name, version, license, homepage, what PlanMark uses it for, license text]
+// [name, version, license, homepage, what SheetScale uses it for, license text]
 const C = [
   ['PDF.js (pdfjs-dist)', ver('pdfjs-dist'), 'Apache-2.0', 'https://github.com/mozilla/pdf.js', 'Renders PDF pages and thumbnails.', APACHE],
   ['PDF.js JBIG2 decoder (from PDFium)', ver('pdfjs-dist'), 'BSD-3-Clause / Apache-2.0', 'https://pdfium.googlesource.com/pdfium/', 'Decodes JBIG2 images inside PDFs.', read(`${nm}pdfjs-dist/wasm/LICENSE_JBIG2`) + '\n\n' + read(`${nm}pdfjs-dist/wasm/LICENSE_PDFJS_JBIG2`)],
@@ -43,16 +43,16 @@ const C = [
 ];
 const DESKTOP = [
   ['Electron', electronVer, 'MIT', 'https://www.electronjs.org/', 'Desktop app shell (Mac and Windows apps only).', read(`${root}vendor/licenses/electron-LICENSE`)],
-  ['Chromium and its components', `bundled with Electron ${electronVer}`, 'BSD-3-Clause and others', 'https://www.chromium.org/', 'Web engine inside the desktop app. Its full list of component licenses (about 500 entries) ships inside the app as LICENSES.chromium.html (PlanMark.app/Contents/Resources/LICENSES.chromium.html) and opens from Help > Acknowledgements > Chromium licenses.', 'See LICENSES.chromium.html inside the application bundle.'],
+  ['Chromium and its components', `bundled with Electron ${electronVer}`, 'BSD-3-Clause and others', 'https://www.chromium.org/', 'Web engine inside the desktop app. Its full list of component licenses (about 500 entries) ships inside the app as LICENSES.chromium.html (SheetScale.app/Contents/Resources/LICENSES.chromium.html) and opens from Help > Acknowledgements > Chromium licenses.', 'See LICENSES.chromium.html inside the application bundle.'],
 ];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const all = [...C, ...DESKTOP];
 const txt = [
-  'PlanMark third-party licenses',
+  'SheetScale third-party licenses',
   '=============================',
   '',
-  'PlanMark is (c) 2026 Andrew Pocta. It includes the open-source components below, each under its own license.',
+  'SheetScale is (c) 2026 Andrew Pocta. It includes the open-source components below, each under its own license.',
   '',
   ...all.flatMap(([n, v, l, h, u, t]) => ['-'.repeat(78), `${n} ${v}`, `License: ${l}`, `Source: ${h}`, `Used for: ${u}`, '', t, '']),
 ].join('\n');
@@ -60,7 +60,7 @@ writeFileSync(`${root}THIRD_PARTY_LICENSES.txt`, txt + '\n');
 
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PlanMark: Acknowledgements</title>
+<title>SheetScale: Acknowledgements</title>
 <style>
 :root{color-scheme:light dark;--bg:#F2F3F5;--card:#fff;--ink:#1c1d21;--mut:#5d6068;--line:#e2e4e8;--acc:#3b5bdb}
 @media (prefers-color-scheme:dark){:root{--bg:#16171a;--card:#1f2024;--ink:#ececef;--mut:#a0a3ab;--line:#2e3036;--acc:#8ea2ff}}
@@ -73,7 +73,7 @@ summary span{color:var(--mut);font-weight:400}pre{white-space:pre-wrap;font:12px
 a{color:var(--acc)}
 </style></head><body><main>
 <h1>Acknowledgements</h1>
-<p class="lead">PlanMark is &copy; 2026 Andrew Pocta. It is built on the open-source software below. Thank you to everyone who made it. Each component keeps its own license; the full texts follow the table.</p>
+<p class="lead">SheetScale is &copy; 2026 Andrew Pocta. It is built on the open-source software below. Thank you to everyone who made it. Each component keeps its own license; the full texts follow the table.</p>
 <table><thead><tr><th>Component</th><th>Version</th><th>License</th><th>Used for</th></tr></thead><tbody>
 ${all.map(([n, v, l, h, u]) => `<tr><td><a href="${h}" target="_blank" rel="noopener">${esc(n)}</a></td><td>${esc(v)}</td><td>${esc(l)}</td><td>${esc(u)}</td></tr>`).join('\n')}
 </tbody></table>

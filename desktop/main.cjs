@@ -1,4 +1,4 @@
-// PlanMark desktop shell (Electron). Serves the bundled web app from app:// and adds native
+// SheetScale desktop shell (Electron). Serves the bundled web app from app:// and adds native
 // File > Open, Open With / dock drop for PDFs and a native Save dialog that writes straight to disk.
 const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, protocol, shell } = require('electron');
 const path = require('node:path');
@@ -20,13 +20,37 @@ protocol.registerSchemesAsPrivileged([
 // Mac App Store build (Electron's "mas" flavour, App Sandbox). No auto-update exists in any build;
 // the MAS build also hides developer tools.
 const IS_MAS = process.mas === true;
-const SITE = 'https://somethingaboutandrew-svg.github.io/planmark/';
+const SITE = 'https://somethingaboutandrew-svg.github.io/sheetscale/';
 
 let win = null;
 let infoWin = null;
 let rendererReady = false;
 const pendingPaths = [];
 let lastDir = null;
+
+// v1.2 rename (PlanMark -> SheetScale): Electron keeps autosave, recent files and settings in
+// <appData>/<productName>. Copy the old PlanMark folder across once so nothing is lost. The old folder
+// stays as it was (so an older build still works). The page origin stays app://planmark on purpose,
+// because IndexedDB and localStorage are keyed by origin. The Mac App Store build is sandboxed in its
+// own container and has never shipped under the old name, so it needs no migration.
+function migrateFromPlanMark() {
+  if (IS_MAS) return;
+  const fsSync = require('node:fs');
+  const dest = app.getPath('userData');
+  const src = path.join(app.getPath('appData'), 'PlanMark');
+  if (src === dest || !fsSync.existsSync(src)) return;
+  const has = (d) => ['IndexedDB', 'Local Storage'].some((x) => fsSync.existsSync(path.join(d, x)));
+  if (has(dest) || !has(src)) return;
+  const skip = new Set(['Cache', 'Code Cache', 'GPUCache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'Crashpad', 'blob_storage']);
+  try {
+    fsSync.mkdirSync(dest, { recursive: true });
+    for (const name of fsSync.readdirSync(src)) {
+      if (skip.has(name) || name.startsWith('Singleton') || name === 'lockfile') continue;
+      fsSync.cpSync(path.join(src, name), path.join(dest, name), { recursive: true, force: false, errorOnExist: false, verbatimSymlinks: true });
+    }
+  } catch (e) { console.error('PlanMark data migration failed', e); }
+}
+migrateFromPlanMark();
 
 if (!app.requestSingleInstanceLock()) app.quit();
 
@@ -118,7 +142,7 @@ function buildMenu() {
     {
       role: 'help',
       submenu: [
-        { label: 'PlanMark Support', click: () => shell.openExternal(SITE + 'support.html') },
+        { label: 'SheetScale Support', click: () => shell.openExternal(SITE + 'support.html') },
         { label: 'Privacy Policy', click: () => shell.openExternal(SITE + 'privacy.html') },
         { type: 'separator' },
         { label: 'Acknowledgements', click: () => showInfo('app://planmark/licenses.html', 'Acknowledgements') },
@@ -168,8 +192,8 @@ ipcMain.on('renderer-ready', () => {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'PlanMark',
-    // match the first paint of the Studio Pro theme (dark unless the system is in light mode)
+    width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'SheetScale',
+    // match the first paint of the Graphite theme (dark unless the system is in light mode)
     backgroundColor: '#F2F3F5', // light glass is the default theme
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 15 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },

@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-// PM_BASE_URL=https://somethingaboutandrew-svg.github.io/planmark/ runs the suite against a deployed copy.
+// PM_BASE_URL=https://somethingaboutandrew-svg.github.io/sheetscale/ runs the suite against a deployed copy.
 const remote = process.env.PM_BASE_URL;
 export default defineConfig({
   testDir: './tests',

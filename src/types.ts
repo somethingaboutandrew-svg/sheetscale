@@ -77,5 +77,5 @@ export interface Doc {
 export interface SourceFile {
   id: string;
   name: string;
-  bytes: Uint8Array; // cleaned bytes (PlanMark annotations removed)
+  bytes: Uint8Array; // cleaned bytes (SheetScale annotations removed)
 }

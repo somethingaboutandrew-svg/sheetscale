@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 // Generates dist/sw.js with a precache list of every built file so the app works fully offline.
 function serviceWorker(): Plugin {
   return {
-    name: 'planmark-sw',
+    name: 'sheetscale-sw',
     apply: 'build',
     closeBundle() {
       const dist = join(process.cwd(), 'dist');

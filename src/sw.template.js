@@ -1,4 +1,4 @@
-// PlanMark service worker: precaches the app shell so it runs offline. Never touches user files.
+// SheetScale service worker: precaches the app shell so it runs offline. Never touches user files.
 const VERSION = '__VERSION__';
 const FILES = __FILES__;
 const CACHE = 'planmark-' + VERSION;

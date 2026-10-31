@@ -1,26 +1,28 @@
-# PlanMark
+# SheetScale
 
-PlanMark is a private PDF markup and measurement tool for plan sheets. It's my own Bluebeam-style app. You can:
+SheetScale is a private PDF markup and measurement tool for plan sheets. It works offline, with no account and no subscription. You can:
 
 - Calibrate the scale and measure length, area (sq ft / acres) and counts.
 - Mark up sheets, with layers.
 - Combine PDFs, lossless size reduction, and images to PDF.
 
-The default look is a light "Liquid Glass" theme: a pale grey canvas with frosted side panels. A dark theme, or following your computer's setting, is under the Appearance button in the title bar. If your system is set to reduce transparency, the panels go solid.
+The default look is a light "Liquid Glass" theme: a pale grey canvas with frosted side panels. A dark theme (Graphite), or following your computer's setting, is under the Appearance button in the title bar. If your system is set to reduce transparency, the panels go solid.
+
+SheetScale was called PlanMark up to v1.1. Your autosaved documents, recent files and settings carry over automatically.
 
 **Your files stay on your device.** Everything (opening, editing, combining, compressing) runs locally in the browser or the desktop app. Nothing is uploaded, and there is no server, account or tracking.
 
-- **Web app:** https://somethingaboutandrew-svg.github.io/planmark/. It works offline after the first visit, and you can install it from the browser menu.
-- **Mac app:** download from [Releases](https://github.com/somethingaboutandrew-svg/planmark/releases). Use `PlanMark-…-mac-arm64.zip` on Apple Silicon (M1–M4) and `…-mac-x64.zip` on Intel Macs. The app is not notarized, so the first time you open it:
-  1. Unzip it and drag **PlanMark.app** to Applications.
-  2. Right-click (or Control-click) **PlanMark.app**, choose **Open**, then click **Open** again.
-  3. If macOS only offers *Done / Move to Trash*: open **System Settings → Privacy & Security**, scroll to *"PlanMark" was blocked…*, click **Open Anyway**, and confirm.
-  4. If it says *"PlanMark is damaged and can't be opened"*, run this in Terminal, then open it again:
-     `xattr -cr /Applications/PlanMark.app`
+- **Web app:** https://somethingaboutandrew-svg.github.io/sheetscale/. It works offline after the first visit, and you can install it from the browser menu.
+- **Mac app:** download from [Releases](https://github.com/somethingaboutandrew-svg/sheetscale/releases). Use `SheetScale-…-mac-arm64.zip` on Apple Silicon (M1–M4) and `…-mac-x64.zip` on Intel Macs. The app is not notarized, so the first time you open it:
+  1. Unzip it and drag **SheetScale.app** to Applications.
+  2. Right-click (or Control-click) **SheetScale.app**, choose **Open**, then click **Open** again.
+  3. If macOS only offers *Done / Move to Trash*: open **System Settings → Privacy & Security**, scroll to *"SheetScale" was blocked…*, click **Open Anyway**, and confirm.
+  4. If it says *"SheetScale is damaged and can't be opened"*, run this in Terminal, then open it again:
+     `xattr -cr /Applications/SheetScale.app`
 
 ## Big files
 
-PlanMark is built for report sets of a few hundred pages. On the test set (three 100-page reports with photos and full-sheet maps, 125 MB in total, combined into one 300-page PDF), it opens the first report in under a second, scrolls all 300 pages at 60 fps and keeps the whole browser at about 2.4–2.9 GB of memory at peak, even while saving and reducing the combined file. Pages and thumbnails render in a background worker, and saving runs in a worker that is thrown away afterwards, so the app stays responsive. Full numbers and method: [docs/PERF.md](docs/PERF.md).
+SheetScale is built for report sets of a few hundred pages. On the test set (three 100-page reports with photos and full-sheet maps, 125 MB in total, combined into one 300-page PDF), it opens the first report in under a second, scrolls all 300 pages at 60 fps and keeps the whole browser at about 2.4–2.9 GB of memory at peak, even while saving and reducing the combined file. Pages and thumbnails render in a background worker, and saving runs in a worker that is thrown away afterwards, so the app stays responsive. Full numbers and method: [docs/PERF.md](docs/PERF.md).
 
 ## Develop
 
@@ -38,7 +40,7 @@ See [docs/FEATURES.md](docs/FEATURES.md) for the full feature list.
 
 ## Mac App Store
 
-Everything for the Mac App Store submission is in [appstore/](appstore/): the step-by-step [SUBMIT.md](appstore/SUBMIT.md), listing text in [METADATA.md](appstore/METADATA.md), screenshots and a sample PDF for App Review. The sandboxed build is `cd desktop && npm run dist:mas` (signing needs Andrew's Apple certificates). Privacy policy: [privacy.html](https://somethingaboutandrew-svg.github.io/planmark/privacy.html). Support: [support.html](https://somethingaboutandrew-svg.github.io/planmark/support.html).
+Everything for the Mac App Store submission is in [appstore/](appstore/): the step-by-step [SUBMIT.md](appstore/SUBMIT.md), listing text in [METADATA.md](appstore/METADATA.md), screenshots and a sample PDF for App Review. The sandboxed build is `cd desktop && npm run dist:mas` (signing needs Andrew's Apple certificates). Privacy policy: [privacy.html](https://somethingaboutandrew-svg.github.io/sheetscale/privacy.html). Support: [support.html](https://somethingaboutandrew-svg.github.io/sheetscale/support.html).
 
 ## License
 

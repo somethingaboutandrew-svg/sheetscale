@@ -1,9 +1,9 @@
 {
-  "name": "planmark",
-  "version": "1.1.0",
+  "name": "sheetscale",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "PlanMark - private, local-only PDF markup and measurement app",
+  "description": "SheetScale - private, local-only PDF markup and measurement app",
   "scripts": {
     "assets": "node scripts/copy-assets.mjs",
     "dev": "npm run assets && vite",

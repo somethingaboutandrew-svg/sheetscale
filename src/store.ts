@@ -1,7 +1,7 @@
 // Local persistence (IndexedDB). Everything stays in this browser profile.
 import type { Doc, SourceFile } from './types';
 
-const DB = 'planmark';
+const DB = 'planmark'; // pre-rename name kept on purpose: existing autosave and recent files stay readable
 let dbp: Promise<IDBDatabase> | null = null;
 function db() {
   return (dbp ??= new Promise((res, rej) => {

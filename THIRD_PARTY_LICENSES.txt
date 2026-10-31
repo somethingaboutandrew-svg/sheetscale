@@ -1,7 +1,7 @@
-PlanMark third-party licenses
+SheetScale third-party licenses
 =============================
 
-PlanMark is (c) 2026 Andrew Pocta. It includes the open-source components below, each under its own license.
+SheetScale is (c) 2026 Andrew Pocta. It includes the open-source components below, each under its own license.
 
 ------------------------------------------------------------------------------
 PDF.js (pdfjs-dist) 6.4.299
@@ -1570,7 +1570,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 Chromium and its components bundled with Electron 45.2.1
 License: BSD-3-Clause and others
 Source: https://www.chromium.org/
-Used for: Web engine inside the desktop app. Its full list of component licenses (about 500 entries) ships inside the app as LICENSES.chromium.html (PlanMark.app/Contents/Resources/LICENSES.chromium.html) and opens from Help > Acknowledgements > Chromium licenses.
+Used for: Web engine inside the desktop app. Its full list of component licenses (about 500 entries) ships inside the app as LICENSES.chromium.html (SheetScale.app/Contents/Resources/LICENSES.chromium.html) and opens from Help > Acknowledgements > Chromium licenses.
 
 See LICENSES.chromium.html inside the application bundle.
 

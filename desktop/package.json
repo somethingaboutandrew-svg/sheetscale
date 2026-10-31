@@ -1,8 +1,8 @@
 {
-  "name": "planmark-desktop",
-  "productName": "PlanMark",
-  "version": "1.1.0",
-  "description": "PlanMark - private PDF markup and measurement (desktop)",
+  "name": "sheetscale-desktop",
+  "productName": "SheetScale",
+  "version": "1.2.0",
+  "description": "SheetScale - private PDF markup and measurement (desktop)",
   "author": "Andrew Pocta",
   "license": "MIT",
   "main": "main.cjs",
@@ -16,8 +16,8 @@
     "dist:mas-unsigned": "npm run stage && electron-builder --mac mas --universal --publish never -c.mas.identity=null -c.mas.provisioningProfile=null"
   },
   "build": {
-    "appId": "com.andrewpocta.planmark",
-    "productName": "PlanMark",
+    "appId": "com.andrewpocta.sheetscale",
+    "productName": "SheetScale",
     "copyright": "Copyright 2026 Andrew Pocta",
     "directories": {
       "output": "release",
@@ -35,7 +35,7 @@
       "icon": "build/icon.png",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "artifactName": "PlanMark-${version}-mac-${arch}.${ext}",
+      "artifactName": "SheetScale-${version}-mac-${arch}.${ext}",
       "minimumSystemVersion": "12.0",
       "darkModeSupport": true,
       "extendInfo": {
@@ -72,14 +72,14 @@
       "preAutoEntitlements": true,
       "minimumSystemVersion": "12.0",
       "category": "public.app-category.productivity",
-      "artifactName": "PlanMark-${version}-mas.${ext}"
+      "artifactName": "SheetScale-${version}-mas.${ext}"
     },
     "masDev": {
       "type": "development",
       "entitlements": "build/entitlements.mas.plist",
       "entitlementsInherit": "build/entitlements.mas.inherit.plist",
       "preAutoEntitlements": true,
-      "artifactName": "PlanMark-${version}-mas-dev.${ext}",
+      "artifactName": "SheetScale-${version}-mas-dev.${ext}",
       "provisioningProfile": "build/development.provisionprofile"
     }
   },

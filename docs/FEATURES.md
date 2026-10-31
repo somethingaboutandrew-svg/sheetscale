@@ -1,6 +1,6 @@
-# PlanMark
+# SheetScale
 
-Private, browser-based PDF markup and measurement app (a personal Bluebeam-style tool).
+Private, browser-based PDF markup and measurement app (formerly PlanMark).
 Everything runs locally in the browser: files are opened, edited, combined and compressed on the
 device and are never uploaded. Works in current Chrome, Edge and Safari on Windows and macOS and can
 be installed as an app (PWA) from the browser's install / "Add to Dock" / "Add to Home Screen" menu.

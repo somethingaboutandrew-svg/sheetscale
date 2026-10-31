@@ -1,6 +1,6 @@
 {
-  "name": "PlanMark",
-  "short_name": "PlanMark",
+  "name": "SheetScale",
+  "short_name": "SheetScale",
   "description": "Private PDF markup, measurement and page tools. Your files stay on your device.",
   "start_url": "./",
   "scope": "./",

@@ -1,4 +1,4 @@
-# Submitting PlanMark to the Mac App Store
+# Submitting SheetScale to the Mac App Store
 
 This is the step-by-step checklist for Andrew. Everything that could be prepared without your Apple
 account is already in this repo. Steps marked **[You]** need your Apple ID, your Mac or a decision
@@ -11,25 +11,30 @@ What is already done:
 | Mac App Store build config (universal, App Sandbox, macOS 12+, encryption flag, category) | `desktop/package.json` → `build.mac`, `build.mas`, `build.masDev` |
 | Sandbox entitlements (main app + helpers) | `desktop/build/entitlements.mas.plist`, `desktop/build/entitlements.mas.inherit.plist` |
 | Acknowledgements (all open-source licenses) | in the app: Help > Acknowledgements and the start-screen footer; file: `THIRD_PARTY_LICENSES.txt` |
-| Privacy policy and support pages | https://somethingaboutandrew-svg.github.io/planmark/privacy.html and …/support.html |
+| Privacy policy and support pages | https://somethingaboutandrew-svg.github.io/sheetscale/privacy.html and …/support.html |
 | Listing text, keywords, age rating, App Privacy answers, review notes | `appstore/METADATA.md` (and `appstore/metadata.json`) |
 | Screenshots, 2880 × 1800 | `appstore/screenshots/` (9 files, upload in file-name order) |
-| Sample PDF for Apple's reviewers | `appstore/review/PlanMark-review-sample.pdf`, also at https://somethingaboutandrew-svg.github.io/planmark/samples/sample-plan.pdf |
+| Sample PDF for Apple's reviewers | `appstore/review/SheetScale-review-sample.pdf`, also at https://somethingaboutandrew-svg.github.io/sheetscale/samples/sample-plan.pdf |
 | App icon | `desktop/build/icon.png` is 1024 × 1024; the build turns it into `icon.icns` with the 1024 px (512@2x) size Apple requires |
 
 ---
 
-## 0. Decide the name first **[You]**
+## 0. Name check (done 31 Oct 2026) **[You: optional attorney check]**
 
-"PlanMark" is not safe to launch under (details in the launch-plan Page):
+The app was renamed from PlanMark to **SheetScale** because OCUBUILD, LLC has pending USPTO applications for
+PLANMARK (serial 99865963) and PLANMARK BY OCUBUILD (99865968) for construction-plan software.
 
-- **USPTO:** OCUBUILD, LLC has a pending application for **PLANMARK** (serial 99865963) and **PLANMARK BY OCUBUILD** (99865968), for construction-plan drawing software in classes 9 and 42. Look them up at https://tmsearch.uspto.gov/ by those serial numbers.
-- **App Store:** "Planmark Room Scanner" (iPhone, LiDAR floor plans with PDF export) is already listed: https://apps.apple.com/us/app/planmark-room-scanner/id6782553911
-- **Web:** Planmark Oy (planmark.io) sells ESG-reporting software.
+Quick recheck of "SheetScale" on 31 Oct 2026:
 
-Pick a new name **before** you create the App Store Connect record, because the bundle ID can never change afterwards. Candidates that had no USPTO record and no App Store app with that name on 31 Oct 2026: **SheetScale**, **PlanTally**, **MarkScale**. A trademark attorney's clearance search is still worth it before you spend on marketing.
+- **USPTO** (https://tmsearch.uspto.gov/, word marks SHEETSCALE, SHEET SCALE, SHEETSCAL*): no live or dead record.
+  The only near match is SCALESHEET (class 10, medical devices), which is dead.
+- **Mac and iPhone App Store:** no app called SheetScale.
+- **Web:** sheetscale.com sells Shopify spreadsheet templates under "Sheet Scale" (no registered mark, unrelated goods).
+  "SheetScale" is also a property name inside CAD tools (Solid Edge, CATIA), so the name is partly descriptive. That's fine
+  for an app name, but it may be harder to register as a trademark yourself.
 
-When you've chosen, tell Grok Bot. The rename touches the app's title, the logo text, the window title, `productName`, the bundle ID, the web pages and the screenshots, and it can be done in one pass. The steps below say "PlanMark" and `com.andrewpocta.planmark`; replace both with the new name.
+This is a quick screen, not legal clearance. A trademark attorney's clearance search is still worth it before you spend
+on marketing. The bundle ID is `com.andrewpocta.sheetscale` and can never change once the App Store Connect record exists.
 
 ## 1. Business setup in App Store Connect **[You]**
 
@@ -42,8 +47,8 @@ When you've chosen, tell Grok Bot. The rename touches the app's title, the logo 
 https://developer.apple.com/account/resources/identifiers/list → **+**
 
 1. **App IDs** → Continue → type **App** → Continue.
-2. Platform **macOS**. Description: `PlanMark`. Bundle ID: **Explicit**, `com.andrewpocta.planmark`.
-3. Capabilities: leave everything unticked. PlanMark needs none, and the App Sandbox is set by the entitlements file, not here.
+2. Platform **macOS**. Description: `SheetScale`. Bundle ID: **Explicit**, `com.andrewpocta.sheetscale`.
+3. Capabilities: leave everything unticked. SheetScale needs none, and the App Sandbox is set by the entitlements file, not here.
 4. Continue → Register.
 
 ## 3. Certificates **[You] [Mac]**
@@ -68,13 +73,13 @@ Only needed for the sandbox test build in step 6.
 
 https://developer.apple.com/account/resources/profiles/list → **+**
 
-1. **Distribution → Mac App Store Connect** → App ID `com.andrewpocta.planmark` → certificate **Apple Distribution** → name `PlanMark MAS` → Generate → Download. Save it as:
+1. **Distribution → Mac App Store Connect** → App ID `com.andrewpocta.sheetscale` → certificate **Apple Distribution** → name `SheetScale MAS` → Generate → Download. Save it as:
 
-       planmark/desktop/build/embedded.provisionprofile
+       sheetscale/desktop/build/embedded.provisionprofile
 
-2. **Development → macOS App Development** → same App ID → your **Apple Development** certificate → your Mac → name `PlanMark Dev` → Download. Save it as:
+2. **Development → macOS App Development** → same App ID → your **Apple Development** certificate → your Mac → name `SheetScale Dev` → Download. Save it as:
 
-       planmark/desktop/build/development.provisionprofile
+       sheetscale/desktop/build/development.provisionprofile
 
 Both file names are in `.gitignore`, so they stay on your Mac and are never committed.
 
@@ -82,16 +87,16 @@ Both file names are in `.gitignore`, so they stay on your Mac and are never comm
 
 Install Node.js 20 or later (https://nodejs.org, LTS) if you don't have it. Then:
 
-    git clone https://github.com/somethingaboutandrew-svg/planmark.git
-    cd planmark
+    git clone https://github.com/somethingaboutandrew-svg/sheetscale.git
+    cd sheetscale
     npm ci && npm run build
     cd desktop && npm ci
     npm run dist:mas-dev          # Apple Development signed, sandboxed, arm64
-    open release/mas-dev-arm64/PlanMark.app
+    open release/mas-dev-arm64/SheetScale.app
 
 Then check these in the app. They prove the App Sandbox build works, which could only be checked on a Mac:
 
-- [ ] Activity Monitor → right-click the column header → add **Sandbox**. PlanMark shows **Yes**.
+- [ ] Activity Monitor → right-click the column header → add **Sandbox**. SheetScale shows **Yes**.
 - [ ] File > Open… opens a PDF from Documents, Desktop and an external drive.
 - [ ] Drag a PDF from Finder onto the window, and onto the Dock icon. Both open.
 - [ ] Measure something, then File > Save. Save the file next to the original, and check that the saved file opens in Preview.
@@ -100,23 +105,23 @@ Then check these in the app. They prove the App Sandbox build works, which could
 - [ ] Help > Acknowledgements and Help > Chromium Licenses open. Help > Privacy Policy opens Safari.
 - [ ] Turn Wi-Fi off and repeat one open, measure and save. Everything still works.
 
-If anything fails, copy the error from **Console.app** (filter by "PlanMark" or "sandbox") and send it to Grok Bot.
+If anything fails, copy the error from **Console.app** (filter by "SheetScale" or "sandbox") and send it to Grok Bot.
 
 ## 7. Build the signed upload package **[Mac]**
 
-From `planmark/desktop`:
+From `sheetscale/desktop`:
 
     npm run dist:mas
 
-This builds a **universal** (Apple Silicon + Intel) app with Electron's Mac App Store build. It is signed with **Apple Distribution**, wrapped in a `.pkg` signed with **Mac Installer Distribution**, and the `embedded.provisionprofile` from step 5 goes inside it. electron-builder adds the required `com.apple.security.application-groups` entitlement (`<TeamID>.com.andrewpocta.planmark`) and `ElectronTeamID` automatically from your certificate. The result is:
+This builds a **universal** (Apple Silicon + Intel) app with Electron's Mac App Store build. It is signed with **Apple Distribution**, wrapped in a `.pkg` signed with **Mac Installer Distribution**, and the `embedded.provisionprofile` from step 5 goes inside it. electron-builder adds the required `com.apple.security.application-groups` entitlement (`<TeamID>.com.andrewpocta.sheetscale`) and `ElectronTeamID` automatically from your certificate. The result is:
 
-    desktop/release/mas-universal/PlanMark.app
-    desktop/release/PlanMark-1.1.0-mas.pkg
+    desktop/release/mas-universal/SheetScale.app
+    desktop/release/SheetScale-1.1.0-mas.pkg
 
 Optional checks:
 
-    pkgutil --check-signature release/PlanMark-1.1.0-mas.pkg      # signed by 3rd Party Mac Developer Installer / Mac Installer Distribution
-    codesign -d --entitlements - release/mas-universal/PlanMark.app   # app-sandbox, user-selected.read-write, application-groups
+    pkgutil --check-signature release/SheetScale-1.1.0-mas.pkg      # signed by 3rd Party Mac Developer Installer / Mac Installer Distribution
+    codesign -d --entitlements - release/mas-universal/SheetScale.app   # app-sandbox, user-selected.read-write, application-groups
 
 Every upload needs a new build number. For the next upload of the same version, use:
 
@@ -129,14 +134,14 @@ App Store Connect → **Apps → + → New App**:
 - Platforms: **macOS**
 - Name: from `appstore/METADATA.md` (or your new name)
 - Primary language: English (U.S.)
-- Bundle ID: `com.andrewpocta.planmark`
-- SKU: `PLANMARK-MAC-001`
+- Bundle ID: `com.andrewpocta.sheetscale`
+- SKU: `SHEETSCALE-MAC-001`
 - User access: Full Access
 
 ## 9. Upload with Transporter **[You] [Mac]**
 
 1. Install **Transporter** from the Mac App Store: https://apps.apple.com/us/app/transporter/id1450874784
-2. Sign in with your Apple ID, drag in `PlanMark-1.1.0-mas.pkg`, and click **Deliver**.
+2. Sign in with your Apple ID, drag in `SheetScale-1.1.0-mas.pkg`, and click **Deliver**.
 3. Processing takes about 15–60 minutes. You get an email when the build is ready, or a list of problems if Apple's automated check rejects it. If you get the rejection email, forward it to Grok Bot.
 
 ## 10. Fill in the listing **[You]**
@@ -147,15 +152,17 @@ Copy everything from `appstore/METADATA.md`:
 2. **App Privacy**: Privacy Policy URL → *Get Started* → "No, we do not collect data from this app" → Publish. The label reads **Data Not Collected**.
 3. **macOS App → 1.1.0 Prepare for Submission**: screenshots (drag in `appstore/screenshots/` in order), promotional text, description, keywords, support URL, marketing URL, version, copyright.
 4. **Build**: choose the build you uploaded. Export compliance is already answered by `ITSAppUsesNonExemptEncryption = false` in the app.
-5. **App Review Information**: your name, phone and email; Sign-in required: **No**; paste the review notes; attach `appstore/review/PlanMark-review-sample.pdf`.
+5. **App Review Information**: your name, phone and email; Sign-in required: **No**; paste the review notes; attach `appstore/review/SheetScale-review-sample.pdf`.
 6. **Version Release**: choose **Manually release this version** so you control launch day.
 
 ## 11. Price **[You]**
 
-**Pricing and Availability** → base country United States:
+**Pricing and Availability** in the app's App Store Connect page:
 
-- Price: **$69.99**. Add a **scheduled price change** so the first two weeks are **$49.99** (start: launch day; end: launch day + 14) and it then returns to $69.99.
-- Availability: all countries, or start with English-speaking ones.
+- Price: **$19.99**, a one-time purchase. No in-app purchases, no subscription and no launch discount or scheduled price change.
+- With the Small Business Program (step 1.2) Apple keeps 15%, so you get about **$16.99** per US sale (Apple computes
+  proceeds on the price before any sales tax or VAT, so the amount varies a little by country).
+- Availability: all countries and regions. Apple sets the local prices from the US price.
 - Optional: tick the volume-purchase discount (50% off for 20 or more copies bought through Apple Business Manager) to make firm-wide purchases easier.
 
 The launch-plan Page explains this price.

@@ -1,6 +1,6 @@
-/* PlanMark. Default look: "Liquid Glass" light. A near-white grey canvas, frosted chrome panels
+/* SheetScale. Default look: "Liquid Glass" light. A near-white grey canvas, frosted chrome panels
    with a 1px inner highlight and soft layered shadows, one restrained blue accent for markup and a
-   muted teal for measurement. Studio Pro dark is the alternative theme.
+   muted teal for measurement. Graphite (dark) is the alternative theme.
    Glass rule: backdrop blur only on chrome that never sits over the PDF (side panels, dialogs,
    popovers, start-screen cards). Anything floating over the pages (tool rail, status capsule,
    tooltip, toast) uses an opaque frosted fill instead, so scrolling never re-runs a blur.

@@ -10,6 +10,8 @@ import { AREA_LABEL, PAPER_SCALE, measureOf, UNIT_LABEL } from './measure';
 import { sanitize } from './font';
 import { decrypt } from './qpdf';
 
+// Internal key for SheetScale's own data inside saved PDFs. It keeps the pre-rename value on purpose
+// so PDFs saved by PlanMark (v1.0-1.1) reopen with editable markups, and new PDFs stay readable by old versions.
 export const APP_KEY = 'PlanMark';
 const PMID = PDFName.of('PMID');
 
@@ -70,7 +72,7 @@ function readVpScale(page: PDFPage): ScaleCal | undefined {
   }
 }
 
-/** Load a PDF: decrypt if needed, read PlanMark data, strip our own annotations so they can be edited live. */
+/** Load a PDF: decrypt if needed, read SheetScale data, strip our own annotations so they can be edited live. */
 export async function loadSource(raw: Uint8Array): Promise<LoadedSource> {
   let doc = await loadLib(raw);
   let bytes = raw;
@@ -87,7 +89,7 @@ export async function loadSource(raw: Uint8Array): Promise<LoadedSource> {
       const data = streamBytes(doc.context.lookup(ref));
       if (data) app = JSON.parse(dec.decode(data));
     } catch (e) {
-      console.warn('PlanMark data unreadable', e);
+      console.warn('SheetScale data unreadable', e);
     }
   }
   if (app) {
@@ -305,8 +307,8 @@ function buildAnnots(doc: PDFDocument, m: Markup, scale: ScaleCal, rot: number, 
 
 export async function exportPdf(docState: Doc, sources: Map<string, SourceFile>, opts: ExportOptions): Promise<Built> {
   const out = await PDFDocument.create({ updateMetadata: false });
-  out.setProducer('PlanMark (local browser app)');
-  out.setCreator('PlanMark');
+  out.setProducer('SheetScale (local browser app)');
+  out.setCreator('SheetScale');
   out.setTitle(docState.name.replace(/\.pdf$/i, ''));
   out.setModificationDate(new Date());
   const ctx = out.context;
@@ -373,7 +375,7 @@ export async function exportPdf(docState: Doc, sources: Map<string, SourceFile>,
   const layerOcg = new Map<string, PDFRef>();
   if (opts.layersAsOcg) {
     const used = new Set(docState.markups.filter((m) => pageRefs.some((p) => p.uid === m.page)).map((m) => m.layer));
-    const appOrder: PDFObject[] = [PDFString.of('PlanMark Markups')];
+    const appOrder: PDFObject[] = [PDFString.of('SheetScale Markups')];
     for (const l of docState.layers) {
       if (!used.has(l.id)) continue;
       const dict = ctx.obj({ Type: 'OCG', Name: PDFHexString.fromText(l.name), Intent: 'View' });
@@ -388,19 +390,19 @@ export async function exportPdf(docState: Doc, sources: Map<string, SourceFile>,
   }
   if (allOcgs.length) {
     out.catalog.set(PDFName.of('OCProperties'), ctx.obj({
-      OCGs: allOcgs, D: ctx.obj({ Name: PDFString.of('PlanMark'), BaseState: 'ON', Order: order, ON: on, OFF: off }),
+      OCGs: allOcgs, D: ctx.obj({ Name: PDFString.of('SheetScale'), BaseState: 'ON', Order: order, ON: on, OFF: off }),
     }));
   }
 
   // ---- Markups, scale viewports ----
-  const author = opts.author || 'PlanMark';
+  const author = opts.author || 'SheetScale';
   for (const { ref, page } of outPages) {
     const scale = ref.scale ?? PAPER_SCALE;
     const rot = page.getRotation().angle;
     const box = page.getCropBox();
     if (ref.scale) {
       page.node.set(PDFName.of('VP'), ctx.obj([ctx.obj({
-        Type: 'Viewport', Name: PDFString.of('PlanMark scale'),
+        Type: 'Viewport', Name: PDFString.of('SheetScale scale'),
         BBox: [box.x, box.y, box.x + box.width, box.y + box.height], Measure: measureDict(out, ref.scale),
       })]));
     }
@@ -443,7 +445,7 @@ export async function exportPdf(docState: Doc, sources: Map<string, SourceFile>,
     }
   }
 
-  // ---- App data so PlanMark can reopen markups as editable ----
+  // ---- App data so SheetScale can reopen markups as editable ----
   const uidIndex = new Map(outPages.map((p, i) => [p.ref.uid, i]));
   const app: AppData = {
     v: 1,
@@ -471,7 +473,7 @@ export async function imageToPngBytes(source: CanvasImageSource, w: number, h: n
 
 export async function imagesToPdf(files: File[]): Promise<Uint8Array> {
   const out = await PDFDocument.create();
-  out.setProducer('PlanMark (local browser app)');
+  out.setProducer('SheetScale (local browser app)');
   const PX_TO_PT = 72 / 96;
   for (const f of files) {
     const buf = new Uint8Array(await f.arrayBuffer());

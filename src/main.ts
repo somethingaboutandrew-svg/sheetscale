@@ -167,7 +167,7 @@ const ib = (id: string, icon: string, tip: string, extra = '') => `<button class
 const app = document.getElementById('app')!;
 app.innerHTML = `
 <header class="titlebar" id="titlebar">
-  <div class="brand">${LOGO(22)}<span>PlanMark</span></div>
+  <div class="brand">${LOGO(22)}<span>SheetScale</span></div>
   <div class="tabs" id="tabs" role="tablist" aria-label="Open documents"></div>
   <button class="ib sm" id="btn-open" aria-label="Open files" data-tip="Open PDFs or images (${MOD}O)">${ICONS.plus}</button>
   <span class="sp"></span>
@@ -289,7 +289,7 @@ $('#btn-theme').onclick = () => {
   if (popEl?.classList.contains('theme-menu')) return closePop();
   hideTip();
   const item = (m: ThemeMode, icon: string, t: string, sub: string) => `<button role="menuitemradio" aria-checked="${themeMode === m}" data-mode="${m}">${ICONS[icon]}<span>${t}<small>${sub}</small></span><span class="ck">${ICONS.check}</span></button>`;
-  const el = openPop($('#btn-theme'), `<div class="hd">Appearance</div><div role="menu" aria-label="Appearance">${item('light', 'sun', 'Light', 'Liquid Glass, the default')}${item('dark', 'moon', 'Dark', 'Studio Pro dark')}${item('auto', 'grid', 'Match system', 'Follows your computer’s setting')}</div>`, 'menu theme-menu');
+  const el = openPop($('#btn-theme'), `<div class="hd">Appearance</div><div role="menu" aria-label="Appearance">${item('light', 'sun', 'Light', 'Liquid Glass, the default')}${item('dark', 'moon', 'Graphite', 'The dark theme')}${item('auto', 'grid', 'Match system', 'Follows your computer’s setting')}</div>`, 'menu theme-menu');
   el.querySelectorAll<HTMLElement>('[data-mode]').forEach((x) => (x.onclick = () => { setThemeMode(x.dataset.mode as ThemeMode); closePop(); }));
   el.querySelector<HTMLElement>('[aria-checked=true]')?.focus();
 };
@@ -808,7 +808,7 @@ const ago = (t: number) => {
 };
 // Privacy, support and open-source acknowledgements. The web build links its own pages; the desktop
 // app opens privacy/support on the website in the browser and shows the bundled licenses in a window.
-const SITE = 'https://somethingaboutandrew-svg.github.io/planmark/';
+const SITE = 'https://somethingaboutandrew-svg.github.io/sheetscale/';
 const INFO_LINKS = [
   ['Privacy', native ? SITE + 'privacy.html' : 'privacy.html'],
   ['Support', native ? SITE + 'support.html' : 'support.html'],
@@ -2503,7 +2503,7 @@ function openExportDialog() {
   const base = doc.name.replace(/\.pdf$/i, '');
   const canPick = 'showSaveFilePicker' in window;
   const dlg = dialog(`<form class="dlg" id="ex-form"><h3>Save PDF</h3>
-    <label class="radio"><input type="radio" name="ex-mode" value="editable" checked><div><b>Editable markups</b><small>Markups are real PDF annotations (Acrobat, Foxit, Bluebeam and PlanMark can edit them).</small></div></label>
+    <label class="radio"><input type="radio" name="ex-mode" value="editable" checked><div><b>Editable markups</b><small>Real PDF annotations that stay editable in SheetScale and most other PDF editors.</small></div></label>
     <label class="radio"><input type="radio" name="ex-mode" value="flatten"><div><b>Flattened</b><small>Markups are burned into the page content and can no longer be moved or edited.</small></div></label>
     <div class="row"><label>File name</label><input type="text" id="ex-name" value="${esc(base)}"><span class="muted">.pdf</span></div>
     <div class="row"><input type="checkbox" id="ex-ocg" checked><span>Save markup layers as PDF layers</span></div>

@@ -4,14 +4,14 @@ import { existsSync, statSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const FIX = new URL('./fixtures/', import.meta.url).pathname;
-const OUT = '/tmp/planmark-desktop-test/';
+const OUT = '/tmp/sheetscale-desktop-test/';
 test.setTimeout(180_000);
 
 test('desktop shell: open-file event, measure, native Save, File>Open, qpdf reduce', async () => {
   rmSync(OUT, { recursive: true, force: true });
   execFileSync('mkdir', ['-p', OUT]);
   const app = await electron.launch({
-    executablePath: new URL('../desktop/release/linux-unpacked/planmark-desktop', import.meta.url).pathname,
+    executablePath: new URL('../desktop/release/linux-unpacked/sheetscale-desktop', import.meta.url).pathname,
     args: ['--no-sandbox', `--user-data-dir=${OUT}profile`],
   });
   const page = await app.firstWindow();
@@ -78,7 +78,7 @@ test('desktop shell: open-file event, measure, native Save, File>Open, qpdf redu
 
 test('desktop shell: PDF passed at launch (before renderer is ready) is queued and opened', async () => {
   const app = await electron.launch({
-    executablePath: new URL('../desktop/release/linux-unpacked/planmark-desktop', import.meta.url).pathname,
+    executablePath: new URL('../desktop/release/linux-unpacked/sheetscale-desktop', import.meta.url).pathname,
     args: ['--no-sandbox', `--user-data-dir=${OUT}profile2`, FIX + 'layers.pdf'],
   });
   const page = await app.firstWindow();
@@ -88,7 +88,7 @@ test('desktop shell: PDF passed at launch (before renderer is ready) is queued a
 
 test('desktop shell: Help menu and start-screen links open the bundled Acknowledgements and the Chromium licenses', async () => {
   const app = await electron.launch({
-    executablePath: new URL('../desktop/release/linux-unpacked/planmark-desktop', import.meta.url).pathname,
+    executablePath: new URL('../desktop/release/linux-unpacked/sheetscale-desktop', import.meta.url).pathname,
     args: ['--no-sandbox', `--user-data-dir=${OUT}profile3`],
   });
   const page = await app.firstWindow();
@@ -96,7 +96,7 @@ test('desktop shell: Help menu and start-screen links open the bundled Acknowled
   const opened: string[] = [];
   await app.evaluate(({ shell }) => { (shell as any).openExternal = async (u: string) => { (globalThis as any).__ext = [...((globalThis as any).__ext || []), u]; }; });
   const help = () => app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.find((i) => i.role === 'help' || i.label === 'Help')!.submenu!.items.map((i) => i.label));
-  expect(await help()).toEqual(['PlanMark Support', 'Privacy Policy', '', 'Acknowledgements', 'Chromium Licenses']);
+  expect(await help()).toEqual(['SheetScale Support', 'Privacy Policy', '', 'Acknowledgements', 'Chromium Licenses']);
 
   // start-screen footer link -> child window with the bundled licenses page
   const [ack] = await Promise.all([app.waitForEvent('window'), page.click('.kb .links a:has-text("Acknowledgements")')]);
@@ -117,9 +117,34 @@ test('desktop shell: Help menu and start-screen links open the bundled Acknowled
   await app.evaluate(({ Menu }) => {
     const items = Menu.getApplicationMenu()!.items.find((i) => i.role === 'help' || i.label === 'Help')!.submenu!.items;
     items.find((i) => i.label === 'Privacy Policy')!.click();
-    items.find((i) => i.label === 'PlanMark Support')!.click();
+    items.find((i) => i.label === 'SheetScale Support')!.click();
   });
   opened.push(...(await app.evaluate(() => (globalThis as any).__ext)));
-  expect(opened).toEqual(['https://somethingaboutandrew-svg.github.io/planmark/privacy.html', 'https://somethingaboutandrew-svg.github.io/planmark/support.html']);
+  expect(opened).toEqual(['https://somethingaboutandrew-svg.github.io/sheetscale/privacy.html', 'https://somethingaboutandrew-svg.github.io/sheetscale/support.html']);
   await app.close();
+});
+
+test('desktop shell: autosave, open documents and settings carry over from a PlanMark profile after the rename', async () => {
+  const cfg = OUT + 'xdg/';
+  rmSync(cfg, { recursive: true, force: true });
+  const exe = new URL('../desktop/release/linux-unpacked/sheetscale-desktop', import.meta.url).pathname;
+  // 1) Simulate a v1.1 user: profile in <appData>/PlanMark, same app://planmark origin, with an open, autosaved document.
+  let app = await electron.launch({ executablePath: exe, args: ['--no-sandbox', `--user-data-dir=${cfg}PlanMark`], env: { ...process.env, XDG_CONFIG_HOME: cfg } });
+  let page = await app.firstWindow();
+  await page.waitForSelector('body[data-ready="1"]');
+  await page.evaluate(() => localStorage.setItem('pm.theme', 'dark'));
+  await app.evaluate(({ app }, p) => app.emit('open-file', { preventDefault() {} }, p), FIX + 'sample.pdf');
+  await expect(page.locator('.page')).toHaveCount(3);
+  await page.waitForTimeout(1500); // let the autosave land
+  await app.close();
+  expect(existsSync(cfg + 'SheetScale')).toBe(false);
+  // 2) First launch of SheetScale with its default profile (<appData>/SheetScale): data is copied across.
+  app = await electron.launch({ executablePath: exe, args: ['--no-sandbox'], env: { ...process.env, XDG_CONFIG_HOME: cfg } });
+  page = await app.firstWindow();
+  await page.waitForSelector('body[data-ready="1"]');
+  expect(await app.evaluate(({ app }) => app.getPath('userData'))).toBe(cfg + 'SheetScale');
+  await expect.poll(() => page.evaluate(() => (window as any).__pm.docs.map((d: any) => d.name)), { timeout: 20000 }).toEqual(['sample.pdf']);
+  expect(await page.evaluate(() => localStorage.getItem('pm.theme'))).toBe('dark');
+  await app.close();
+  expect(existsSync(cfg + 'PlanMark/IndexedDB')).toBe(true); // old profile left untouched
 });
