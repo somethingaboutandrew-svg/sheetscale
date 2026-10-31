@@ -108,7 +108,7 @@ test('calibrate, measure, style, layers, export editable + flattened, round-trip
   await setVal(page, '#p-stroke', '#00aa00');
   await setVal(page, '#p-opacity', '60');
   await setVal(page, '#p-width', '3');
-  await page.selectOption('#p-dash', 'dashed');
+  await page.click('.seg.dashes [data-dash="dashed"]');
   let st = ((await markups(page)).find((m) => m.id === lenId)).style;
   expect(st).toMatchObject({ stroke: '#00aa00', opacity: 0.6, width: 3, dash: 'dashed' });
   const line = page.locator(`.mk[data-id="${lenId}"] path[stroke="#00aa00"]`).first();

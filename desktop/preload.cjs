@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('planmarkNative', {
   onOpenFiles: (cb) => ipcRenderer.on('open-files', (_e, files) => cb(files)),
   onCommand: (cb) => ipcRenderer.on('command', (_e, c) => cb(String(c))),
   ready: () => ipcRenderer.send('renderer-ready'),
+  platform: process.platform,
 });

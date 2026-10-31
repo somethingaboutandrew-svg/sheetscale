@@ -16,12 +16,18 @@ PlanMark is a private PDF markup and measurement tool for plan sheets. It's my o
   4. If it says *"PlanMark is damaged and can't be opened"*, run this in Terminal, then open it again:
      `xattr -cr /Applications/PlanMark.app`
 
+## Big files
+
+PlanMark is built for report sets of a few hundred pages. On the test set (three 100-page reports with photos and full-sheet maps, 125 MB in total, combined into one 300-page PDF), it opens the first report in under a second, scrolls all 300 pages at 60 fps and keeps the whole browser under about 2.6 GB of memory, even while saving and reducing the combined file. Pages and thumbnails render in a background worker, and saving runs in a worker that is thrown away afterwards, so the app stays responsive. Full numbers and method: [docs/PERF.md](docs/PERF.md).
+
 ## Develop
 
     npm install
     npm run build        # static site in dist/
     npm run preview      # http://localhost:4173
-    npm test             # Playwright tests
+    npm test             # Playwright tests (features, UI, screenshots)
+    npm run test:perf    # 300-page and large-plan performance run (builds ~125 MB of fixtures first)
+    npm run test:desktop # desktop shell tests (Linux build of the Electron app)
 
     cd desktop && npm install
     npm run dist:mac     # Electron app zips (arm64 + x64) in desktop/release/

@@ -1,10 +1,13 @@
-// Builds a realistic scene and saves screenshots to /workspace/planmark/screenshots (also an end-to-end check).
+// Builds a realistic scene and saves screenshots of the Studio Pro UI to screenshots/v2/after,
+// once in the dark theme and once in the light theme (also an end-to-end check).
 import { test, expect, type Page } from '@playwright/test';
 import { boot, open, clickUser, at, waitRendered, FIX } from './helpers';
 
-const SHOTS = new URL('../screenshots/', import.meta.url).pathname;
+import { mkdirSync } from 'node:fs';
+const SHOTS = new URL('../screenshots/v2/after/', import.meta.url).pathname;
+mkdirSync(SHOTS, { recursive: true });
 const pm = (page: Page, expr: string) => page.evaluate(`(() => { const pm = window.__pm; return ${expr}; })()`);
-test.use({ viewport: { width: 1600, height: 960 }, deviceScaleFactor: 2 });
+test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 
 function bez(p0: number[], p1: number[], p2: number[], p3: number[], n: number) {
   const out: [number, number][] = [];
@@ -15,8 +18,11 @@ function bez(p0: number[], p1: number[], p2: number[], p3: number[], n: number) 
   return out;
 }
 
-test('screenshots', async ({ page }) => {
+for (const theme of ['dark', 'light'] as const) test(`screenshots (${theme})`, async ({ page }) => {
+  const shot = (name: string) => page.screenshot({ path: `${SHOTS}${name}-${theme}.png` });
+  await page.emulateMedia({ colorScheme: theme });
   await boot(page);
+  await shot('00-start-screen');
   await page.evaluate(() => localStorage.setItem('pm.author', 'Andrew Pocta'));
   await open(page, 'demo-plan.pdf');
   await page.click('#fit-page');
@@ -30,7 +36,7 @@ test('screenshots', async ({ page }) => {
   await clickUser(page, 0, 1089, 433);
   await page.fill('#cal-value', '100');
   await page.selectOption('#cal-unit', 'ft');
-  await page.screenshot({ path: SHOTS + '04-calibrate-on-scale-bar.png' });
+  await shot('01-calibrate-on-scale-bar');
   await page.click('#cal-ok');
   await page.waitForTimeout(2800); // let the toast fade before later shots
 
@@ -82,44 +88,62 @@ test('screenshots', async ({ page }) => {
   await clickUser(page, 0, 560, 380);
   await page.click('[data-rt="props"]');
   await expect(page.locator('#p-measure')).toContainText('acres');
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: SHOTS + '01-markup-and-measure.png' });
+  await page.hover('[data-tool="m-area"]');
+  await expect(page.locator('#tip.show')).toBeVisible();
+  await page.waitForTimeout(200);
+  await shot('02-main-area-selected');
+  await page.mouse.move(5, 500);
 
   await page.click('[data-rt="markups"]');
   await page.waitForTimeout(200);
-  await page.screenshot({ path: SHOTS + '02-markups-list-and-totals.png' });
+  await shot('03-markups-list-and-totals');
 
   await page.click('[data-rt="layers"]');
   await expect(page.locator('#pdf-layers .layer')).toHaveCount(3);
   await page.locator('#pdf-layers .layer', { hasText: 'Topography' }).locator('input').uncheck();
   await page.waitForTimeout(600);
   await waitRendered(page);
-  await page.screenshot({ path: SHOTS + '03-layers-topo-hidden.png' });
+  await shot('04-layers-topo-hidden');
   await page.locator('#pdf-layers .layer', { hasText: 'Topography' }).locator('input').check();
 
   // zoomed-in detail (crisp vector rendering at 400%)
   await page.evaluate(() => (window as any).__pm.setZoom(4));
   await page.evaluate(() => (window as any).__pm.centerOn(0, 600, 380));
   await page.waitForTimeout(900);
-  await page.screenshot({ path: SHOTS + '05-zoomed-detail-400pct.png' });
+  await shot('05-zoomed-detail-400pct');
   await page.click('#fit-page');
   await page.waitForTimeout(400);
 
   // save dialog
   await page.click('#btn-export');
-  await page.screenshot({ path: SHOTS + '06-save-editable-or-flattened.png' });
+  await shot('06-export-editable-or-flattened');
   await page.keyboard.press('Escape');
 
   // combine dialog
   await page.click('#btn-combine');
   await page.setInputFiles('#cb-file', FIX + 'demo-sheet2.pdf');
   await expect(page.locator('#cb-list .it')).toHaveCount(2);
-  await page.screenshot({ path: SHOTS + '07-combine.png' });
+  await shot('07-combine');
   await page.keyboard.press('Escape');
 
   // reduce dialog on a bloated file
   await page.click('#btn-reduce');
   await page.setInputFiles('#rd-input', FIX + 'bloated.pdf');
   await expect(page.locator('.rd-after')).toBeVisible({ timeout: 30000 });
-  await page.screenshot({ path: SHOTS + '08-reduce-size-lossless.png' });
+  await shot('08-reduce-size-lossless');
+  await page.keyboard.press('Escape');
+
+  // shortcuts sheet, then close everything: the start screen now lists recent files
+  await page.locator('#viewer').focus();
+  await page.keyboard.press('?');
+  await shot('09-shortcuts');
+  await page.keyboard.press('Escape');
+  await open(page, 'demo-sheet2.pdf');
+  for (let n = await page.locator('.tab').count(); n > 0; n--) {
+    await page.locator('.tab .x').first().click();
+    await expect(page.locator('.tab')).toHaveCount(n - 1);
+  }
+  await expect.poll(() => page.locator('.rc').count()).toBeGreaterThanOrEqual(2);
+  await page.waitForTimeout(300);
+  await shot('10-start-screen-recent');
 });

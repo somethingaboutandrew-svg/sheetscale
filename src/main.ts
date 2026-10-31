@@ -9,7 +9,7 @@ import { exportPdf, imagesToPdf, loadSource, TYPE_LABEL } from './pdfio';
 import { reduceLosslessConsume } from './qpdf';
 import { initRenderer, openInRenderer, closeInRenderer, renderPage, workerRenderingAvailable, renderQueueStats } from './render';
 import * as store from './store';
-import { ICONS } from './icons';
+import { ICONS, LOGO } from './icons';
 import { textWidth } from './font';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -38,12 +38,14 @@ const h = (html: string) => {
 };
 const fmtBytes = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(2)} MB` : `${(n / 1024).toFixed(1)} KB`);
 function toast(msg: string, ms = 2600) {
-  const el = h(`<div class="toast">${esc(msg)}</div>`);
+  $$('.toast').forEach((t) => t.remove());
+  const el = h(`<div class="toast" role="status">${esc(msg)}</div>`);
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), ms);
+  requestAnimationFrame(() => el.classList.add('in'));
+  setTimeout(() => { el.classList.remove('in'); setTimeout(() => el.remove(), 160); }, ms);
 }
 async function busy<T>(msg: string, fn: () => Promise<T>): Promise<T> {
-  const el = h(`<div class="busy">${esc(msg)}</div>`);
+  const el = h(`<div class="busy" role="alert" aria-busy="true"><div class="busy-pill"><i class="spin"></i>${esc(msg)}</div></div>`);
   document.body.appendChild(el);
   try {
     return await fn();
@@ -57,8 +59,10 @@ interface NativeBridge {
   onOpenFiles(cb: (files: { name: string; bytes: Uint8Array }[]) => void): void;
   onCommand(cb: (cmd: string) => void): void;
   ready(): void;
+  platform?: string;
 }
 const native = (window as any).planmarkNative as NativeBridge | undefined;
+if (native?.platform === 'darwin') document.documentElement.classList.add('native-mac');
 async function nativeSave(bytes: Uint8Array, name: string) {
   const path = await native!.saveFile(name, bytes);
   if (path) toast(`Saved ${fmtBytes(bytes.length)} to ${path}`, 4000);
@@ -148,65 +152,78 @@ const MULTI_POINT: ToolId[] = ['polyline', 'polygon', 'm-polylength', 'm-perimet
 const RECT_TYPES: MarkupType[] = ['rect', 'ellipse', 'cloud', 'highlight', 'text'];
 
 // ───────────────────────── layout ─────────────────────────
+const TOOL_HINTS: Partial<Record<ToolId, string>> = {
+  select: 'Click, drag a box, or Shift-click to add', pan: 'Drag to move around the sheet',
+  pen: 'Freehand', line: 'Drag from start to end', arrow: 'Drag from tail to tip', polyline: 'Click points, double-click to finish',
+  polygon: 'Click points, double-click to close', rect: 'Drag a box', ellipse: 'Drag a box', cloud: 'Drag a box',
+  text: 'Drag a box, then type', callout: 'Drag from the point to the text box', highlight: 'Drag over the area',
+  'm-length': 'Drag from start to end', 'm-polylength': 'Click points, double-click to finish', 'm-perimeter': 'Click points, double-click to close',
+  'm-area': 'Click points, double-click to close', 'm-count': 'Click each item', calibrate: 'Drag along a known distance',
+};
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const MOD = isMac ? '⌘' : 'Ctrl+';
+const ib = (id: string, icon: string, tip: string, extra = '') => `<button class="ib" id="${id}" aria-label="${esc(tip.replace(/\s*\(.*\)$/, ''))}" data-tip="${esc(tip)}" ${extra}>${ICONS[icon]}</button>`;
+
 const app = document.getElementById('app')!;
 app.innerHTML = `
-<header class="topbar">
-  <div class="brand"><img src="icons/icon.svg" alt="">PlanMark</div>
-  <button class="tb-btn" id="btn-open" title="Open PDFs or images (Ctrl+O)">${ICONS.open}Open</button>
-  <button class="tb-btn" id="btn-save" title="Save PDF with editable markups (Ctrl+S)">${ICONS.save}Save</button>
-  <button class="tb-btn" id="btn-export" title="Save options: editable or flattened">${ICONS.flatten}Save as / Flatten…</button>
-  <span class="tb-sep"></span>
-  <button class="tb-btn" id="btn-combine" title="Combine PDFs">${ICONS.combine}Combine</button>
-  <button class="tb-btn" id="btn-reduce" title="Reduce file size (lossless)">${ICONS.reduce}Reduce size</button>
-  <span class="tb-sep"></span>
-  <button class="tb-btn" id="btn-undo" title="Undo (Ctrl+Z)">${ICONS.undo}</button>
-  <button class="tb-btn" id="btn-redo" title="Redo (Ctrl+Y)">${ICONS.redo}</button>
-  <span class="tb-sep"></span>
-  <span class="zoom">
-    <button class="tb-btn" id="zoom-out" title="Zoom out (-)">${ICONS.minus}</button>
-    <input id="zoom-input" value="100%" title="Zoom" />
-    <button class="tb-btn" id="zoom-in" title="Zoom in (+)">${ICONS.plus}</button>
-    <button class="tb-btn" id="fit-width" title="Fit width">${ICONS.fitw}</button>
-    <button class="tb-btn" id="fit-page" title="Fit page">${ICONS.fitp}</button>
-  </span>
-  <span class="pagenav">Page <input id="page-input" value="0" /> / <span id="page-count">0</span></span>
-  <button class="tb-btn toggle on" id="btn-snap" title="Snap to markup endpoints">${ICONS.magnet}Snap</button>
-  <span class="spacer"></span>
-  <span class="local-badge" title="PlanMark runs entirely in your browser. Files are never uploaded.">${ICONS.shield}<span>Files stay on this device</span></span>
+<header class="titlebar" id="titlebar">
+  <div class="brand">${LOGO(22)}<span>PlanMark</span></div>
+  <div class="tabs" id="tabs" role="tablist" aria-label="Open documents"></div>
+  <button class="ib sm" id="btn-open" aria-label="Open files" data-tip="Open PDFs or images (${MOD}O)">${ICONS.plus}</button>
+  <span class="sp"></span>
+  <span class="savestate" id="st-save" aria-live="polite"></span>
+  <button class="scalechip" id="scalechip" data-tip="Scale for this page. Click to calibrate or change it."><span class="sc-ic">${ICONS.scale}</span><span id="st-scale">No document</span></button>
+  <span class="tsep"></span>
+  ${ib('btn-undo', 'undo', `Undo (${MOD}Z)`)}${ib('btn-redo', 'redo', `Redo (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`)}
+  <span class="tsep"></span>
+  ${ib('btn-combine', 'combine', 'Combine PDFs')}${ib('btn-reduce', 'reduce', 'Reduce file size (lossless)')}
+  ${ib('btn-theme', 'moon', 'Theme')}
+  ${ib('btn-left', 'sidebar', 'Pages panel')}${ib('btn-right', 'sidebarr', 'Properties panel')}
+  <button class="btn" id="btn-export" data-tip="Save a copy: editable or flattened, optionally smaller">${ICONS.export}<span>Export</span></button>
+  <button class="btn primary" id="btn-save" data-tip="Save with editable markups (${MOD}S)">${ICONS.save}<span>Save</span></button>
   <input type="file" id="file-open" multiple accept=".pdf,application/pdf,image/*,.tif,.tiff" hidden />
   <input type="file" id="file-insert" multiple accept=".pdf,application/pdf,image/*,.tif,.tiff" hidden />
+  <input type="file" id="file-images" multiple accept="image/*,.tif,.tiff" hidden />
 </header>
-<nav class="toolbar" id="toolbar"></nav>
-<div class="tabs" id="tabs"></div>
-<main>
-  <aside class="left">
-    <div class="ptabs"><button data-lt="pages" class="active">Pages</button><button data-lt="chest">Tool Chest</button></div>
+<div class="stage" id="stage">
+  <aside class="left glass" aria-label="Pages">
+    <div class="ptabs" role="tablist"><button data-lt="pages" class="active" role="tab">${ICONS.pages}Pages</button><button data-lt="chest" role="tab">${ICONS.chest}Tool Chest</button></div>
     <div class="page-tools" id="page-tools">
-      <button class="btn" id="pg-rotl" title="Rotate left">${ICONS.rotl.replace('<svg', '<svg width="14" height="14"')}</button>
-      <button class="btn" id="pg-rotr" title="Rotate right">${ICONS.rotr.replace('<svg', '<svg width="14" height="14"')}</button>
-      <button class="btn" id="pg-del" title="Delete selected pages">${ICONS.trash.replace('<svg', '<svg width="14" height="14"')}</button>
-      <button class="btn" id="pg-extract" title="Extract selected pages to a new PDF">${ICONS.extract.replace('<svg', '<svg width="14" height="14"')}</button>
-      <button class="btn" id="pg-insert" title="Insert pages from file after current page">${ICONS.insert.replace('<svg', '<svg width="14" height="14"')}</button>
+      ${ib('pg-rotl', 'rotl', 'Rotate left')}${ib('pg-rotr', 'rotr', 'Rotate right')}${ib('pg-del', 'trash', 'Delete selected pages')}${ib('pg-extract', 'extract', 'Extract selected pages to a new PDF')}${ib('pg-insert', 'insert', 'Insert pages from a file after this page')}
     </div>
     <div class="pbody" id="left-body"></div>
   </aside>
-  <section class="viewer" id="viewer" tabindex="0">
+  <section class="viewer" id="viewer" tabindex="0" aria-label="Document">
     <div class="pages" id="pages"></div>
   </section>
-  <aside class="right">
-    <div class="ptabs"><button data-rt="props" class="active">Properties</button><button data-rt="markups">Markups</button><button data-rt="layers">Layers</button><button data-rt="scale">Scale</button></div>
+  <nav class="rail glass" id="toolbar" aria-label="Tools"></nav>
+  <div class="status glass" id="statusbar">
+    ${ib('zoom-out', 'minus', 'Zoom out (−)')}
+    <input id="zoom-input" value="100%" aria-label="Zoom" />
+    ${ib('zoom-in', 'plus', 'Zoom in (+)')}
+    ${ib('fit-width', 'fitw', 'Fit width')}${ib('fit-page', 'fitp', 'Fit page')}
+    <span class="div"></span>
+    ${ib('pg-prev', 'chevl', 'Previous page')}<span class="pagenav"><input id="page-input" value="0" aria-label="Page number" /><span>/</span><span id="page-count">0</span></span>${ib('pg-next', 'chevr', 'Next page')}
+    <span class="div"></span>
+    <span class="coord" id="st-pos"></span>
+    <span class="live" id="st-live"></span>
+    <button class="snap on" id="btn-snap" aria-pressed="true" data-tip="Snap to markup points">${ICONS.magnet}<span>Snap</span></button>
+  </div>
+  <aside class="right glass" aria-label="Inspector">
+    <div class="ptabs" role="tablist"><button data-rt="props" class="active" role="tab">${ICONS.sliders}<span>Style</span></button><button data-rt="markups" role="tab">${ICONS.list}<span>Markups</span></button><button data-rt="layers" role="tab">${ICONS.layers}<span>Layers</span></button><button data-rt="scale" role="tab">${ICONS.scale}<span>Scale</span></button></div>
     <div class="pbody" id="right-body"></div>
   </aside>
-</main>
-<footer class="status"><span id="st-scale">No document</span><span id="st-live" class="live"></span><span class="spacer"></span><span id="st-pos"></span><span id="st-save"></span></footer>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
 `;
 
 const viewer = $('#viewer');
 const pagesEl = $('#pages');
+const stage = $('#stage');
 let leftTab: 'pages' | 'chest' = 'pages';
 let rightTab: 'props' | 'markups' | 'layers' | 'scale' = 'props';
 
-// toolbar
+// tool rail
 {
   const groups: [string, ToolId[]][] = [
     ['', ['select', 'pan']],
@@ -214,16 +231,94 @@ let rightTab: 'props' | 'markups' | 'layers' | 'scale' = 'props';
     ['Measure', ['calibrate', 'm-length', 'm-polylength', 'm-perimeter', 'm-area', 'm-count']],
   ];
   const tb = $('#toolbar');
-  groups.forEach(([label, ids], gi) => {
-    if (gi) tb.appendChild(h('<span class="tsep"></span>'));
-    if (label) tb.appendChild(h(`<span class="tgroup-label">${label}</span>`));
+  groups.forEach(([label, ids]) => {
+    if (label) tb.appendChild(h(`<div class="grp ${label === 'Measure' ? 'ms' : ''}">${label}</div>`));
     for (const id of ids) {
-      const b = h(`<button class="tool" data-tool="${id}" title="${TOOL_NAMES[id]}" aria-label="${TOOL_NAMES[id]}">${ICONS[id]}</button>`);
+      const name = TOOL_NAMES[id];
+      const b = h(`<button class="tool ${label === 'Measure' ? 'mtool' : ''}" data-tool="${id}" aria-label="${esc(name.replace(/\s*\(.*\)$/, ''))}" data-tip="${esc(name)}" data-hint="${esc(TOOL_HINTS[id] ?? '')}" data-side="right">${ICONS[id]}</button>`);
       b.onclick = () => setTool(id);
       tb.appendChild(b);
     }
   });
 }
+
+// ── theme: auto (follows the system), dark or light ──
+type ThemeMode = 'auto' | 'dark' | 'light';
+let themeMode: ThemeMode = (localStorage.getItem('pm.theme') as ThemeMode) || 'auto';
+const mqLight = matchMedia('(prefers-color-scheme: light)');
+function applyTheme() {
+  const t = themeMode === 'auto' ? (mqLight.matches ? 'light' : 'dark') : themeMode;
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'dark' ? '#0B0C0F' : '#ECEDF1');
+  const b = $('#btn-theme');
+  const label = themeMode === 'auto' ? `Theme: auto, follows your system (now ${t})` : `Theme: ${t}`;
+  b.innerHTML = themeMode === 'auto' ? ICONS.grid.replace('<svg', '<svg class="auto"') : t === 'dark' ? ICONS.moon : ICONS.sun;
+  b.dataset.tip = label;
+  b.setAttribute('aria-label', label);
+}
+mqLight.addEventListener('change', () => themeMode === 'auto' && applyTheme());
+$('#btn-theme').onclick = () => {
+  themeMode = themeMode === 'auto' ? 'dark' : themeMode === 'dark' ? 'light' : 'auto';
+  localStorage.setItem('pm.theme', themeMode);
+  applyTheme();
+  showTip($('#btn-theme'));
+};
+applyTheme();
+
+// ── panels can be hidden to give the sheet more room ──
+function setPanels(left: boolean, right: boolean) {
+  app.classList.toggle('no-left', !left);
+  app.classList.toggle('no-right', !right);
+  $('#btn-left').classList.toggle('on', left);
+  $('#btn-right').classList.toggle('on', right);
+  localStorage.setItem('pm.panels', JSON.stringify({ left, right }));
+}
+{
+  const p = JSON.parse(localStorage.getItem('pm.panels') || 'null') ?? { left: true, right: innerWidth > 1000 };
+  setPanels(p.left, p.right);
+  $('#btn-left').onclick = () => setPanels(app.classList.contains('no-left'), !app.classList.contains('no-right'));
+  $('#btn-right').onclick = () => setPanels(!app.classList.contains('no-left'), app.classList.contains('no-right'));
+}
+
+// ── tooltips: label + shortcut chip + optional hint, transform/opacity only ──
+const tipEl = $('#tip');
+let tipFor: HTMLElement | null = null, tipTimer = 0, tipWarm = 0;
+function showTip(el: HTMLElement) {
+  const raw = el.dataset.tip;
+  if (!raw) return;
+  const m = raw.match(/^(.*?)\s*\(([^()]{1,14})\)$/);
+  const label = m ? m[1] : raw, key = m ? m[2] : '';
+  const hint = el.dataset.hint;
+  tipEl.innerHTML = `<span><b>${esc(label)}</b>${hint ? `<small>${esc(hint)}</small>` : ''}</span>${key ? `<kbd>${esc(key)}</kbd>` : ''}`;
+  const r = el.getBoundingClientRect();
+  const side = el.dataset.side ?? (r.top < 80 ? 'below' : 'above');
+  tipEl.dataset.side = side;
+  tipEl.classList.add('show');
+  const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+  let x = side === 'right' ? r.right + 10 : r.left + r.width / 2 - tw / 2;
+  let y = side === 'right' ? r.top + r.height / 2 - th / 2 : side === 'below' ? r.bottom + 8 : r.top - th - 8;
+  x = Math.max(8, Math.min(innerWidth - tw - 8, x));
+  y = Math.max(8, Math.min(innerHeight - th - 8, y));
+  tipEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  tipFor = el;
+}
+function hideTip() {
+  clearTimeout(tipTimer);
+  if (tipFor) tipWarm = performance.now();
+  tipFor = null;
+  tipEl.classList.remove('show');
+}
+document.addEventListener('pointerover', (e) => {
+  const el = (e.target as HTMLElement).closest?.('[data-tip]') as HTMLElement | null;
+  if (el === tipFor) return;
+  hideTip();
+  if (!el || e.pointerType === 'touch') return;
+  const warm = performance.now() - tipWarm < 400;
+  tipTimer = window.setTimeout(() => showTip(el), warm ? 0 : 450);
+});
+document.addEventListener('pointerdown', hideTip, true);
+document.addEventListener('focusin', (e) => { const el = (e.target as HTMLElement).closest?.('[data-tip]') as HTMLElement | null; if (el?.matches(':focus-visible')) showTip(el); });
+document.addEventListener('focusout', hideTip);
 
 // ───────────────────────── documents ─────────────────────────
 async function addSource(name: string, bytes: Uint8Array, persist = true): Promise<Src> {
@@ -295,11 +390,14 @@ function scheduleSave() {
   if (!doc) return;
   const d = doc;
   $('#st-save').textContent = 'Saving…';
+  $('#st-save').classList.remove('done');
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(async () => {
     await store.putDoc(d);
     await store.putMeta('open', { ids: docs.map((x) => x.id), active: doc?.id });
-    $('#st-save').textContent = 'All changes saved in this browser';
+    $('#st-save').innerHTML = `${ICONS.check}Saved here`;
+    $('#st-save').classList.add('done');
+    $('#st-save').dataset.tip = 'Changes are kept in this browser automatically. Use Save to write a PDF.';
   }, 300);
 }
 
@@ -307,37 +405,114 @@ async function restoreSession() {
   const meta = await store.getMeta<{ ids: string[]; active?: string }>('open');
   if (!meta?.ids?.length) return false;
   for (const id of meta.ids) {
-    const d = await store.getDoc(id);
-    if (!d) continue;
-    d.ocgHidden ??= {};
-    d.ocgShown ??= {};
-    let ok = true;
-    for (const sid of new Set(d.pages.map((p) => p.src))) {
-      if (sources.has(sid)) continue;
-      const s = await store.getSource(sid);
-      if (!s) { ok = false; break; }
-      const pdf = await pdfjs.getDocument({ ...PDFJS_OPTS, data: s.bytes.slice() }).promise;
-      sources.set(sid, { ...s, pdf });
-    }
-    if (ok) docs.push(d);
+    const d = await loadStoredDoc(id);
+    if (d) docs.push(d);
   }
   const act = docs.find((d) => d.id === meta.active) ?? docs[0];
   if (act) await activate(act);
   return docs.length > 0;
 }
 
+// ── recent files: closed documents stay in this browser's storage (not in memory) so they can be
+// reopened from the start screen. Bounded by count and size; the oldest are dropped first.
+interface Recent { id: string; name: string; pages: number; bytes: number; when: number; thumb?: string }
+const RECENT_MAX = 8, RECENT_BYTES = 400 * 1048576;
+const getRecents = async () => (await store.getMeta<Recent[]>('recent')) ?? [];
+async function noteRecent(d: Doc, thumb?: string) {
+  const srcIds = [...new Set(d.pages.map((p) => p.src))];
+  const bytes = srcIds.reduce((n, id) => n + (sources.get(id)?.bytes.length ?? 0), 0);
+  const list = (await getRecents()).filter((r) => r.id !== d.id);
+  const prev = (await getRecents()).find((r) => r.id === d.id);
+  list.unshift({ id: d.id, name: d.name, pages: d.pages.length, bytes, when: Date.now(), thumb: thumb ?? prev?.thumb });
+  await store.putMeta('recent', list);
+}
+/** Delete stored docs/sources that are neither open nor within the recent budget. */
+async function pruneStore() {
+  let list = await getRecents();
+  const open = new Set(docs.map((d) => d.id));
+  let total = 0;
+  const keep: Recent[] = [];
+  for (const r of list) {
+    if (open.has(r.id)) { keep.push(r); continue; }
+    if (keep.length < RECENT_MAX && total + r.bytes <= RECENT_BYTES) { keep.push(r); total += r.bytes; }
+  }
+  list = keep;
+  await store.putMeta('recent', list);
+  const keepDocs = new Set([...open, ...list.map((r) => r.id)]);
+  const usedSrc = new Set(docs.flatMap((x) => x.pages.map((p) => p.src)));
+  for (const r of list) {
+    if (open.has(r.id)) continue;
+    const d = await store.getDoc(r.id);
+    d?.pages.forEach((p) => usedSrc.add(p.src));
+  }
+  for (const id of (await store.allDocIds()) as string[]) if (!keepDocs.has(id)) await store.delDoc(id);
+  for (const id of (await store.allSourceIds()) as string[]) if (!usedSrc.has(id)) await store.delSource(id);
+}
+async function loadStoredDoc(id: string): Promise<Doc | null> {
+  const d = await store.getDoc(id);
+  if (!d) return null;
+  d.ocgHidden ??= {};
+  d.ocgShown ??= {};
+  for (const sid of new Set(d.pages.map((p) => p.src))) {
+    if (sources.has(sid)) continue;
+    const s = await store.getSource(sid);
+    if (!s) return null;
+    const pdf = await pdfjs.getDocument({ ...PDFJS_OPTS, data: s.bytes.slice() }).promise;
+    sources.set(sid, { ...s, pdf });
+  }
+  return d;
+}
+async function openRecent(id: string) {
+  const open = docs.find((d) => d.id === id);
+  if (open) return activate(open);
+  const d = await busy('Opening…', () => loadStoredDoc(id));
+  if (!d) {
+    toast('That file is no longer stored here. Open it again from your disk.', 4000);
+    await store.putMeta('recent', (await getRecents()).filter((r) => r.id !== id));
+    if (!doc) await buildViewer();
+    return;
+  }
+  docs.push(d);
+  await persistDoc(d);
+  await activate(d);
+}
+/** Small JPEG of page 1 for the start screen. */
+async function recentThumb(d: Doc): Promise<string | undefined> {
+  try {
+    const ref = d.pages[0];
+    if (!ref) return;
+    const proxy = await getProxy(ref);
+    const vp = proxy.getViewport({ scale: 1, rotation: pageRot(proxy, ref) });
+    const s = Math.min(184 / vp.width, 120 / vp.height);
+    const w = Math.max(1, Math.round(vp.width * s)), hh = Math.max(1, Math.round(vp.height * s));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = hh;
+    if (useWorker) {
+      ensureInRenderer(ref.src);
+      const bm = await renderPage({ doc: ref.src, index: ref.index, scale: s, rotation: vp.rotation, width: w, height: hh, annotations: true, priority: 3 }).promise;
+      if (!bm) return;
+      c.getContext('2d')!.drawImage(bm, 0, 0);
+      bm.close();
+    } else await proxy.render({ canvas: c, viewport: proxy.getViewport({ scale: s, rotation: vp.rotation }) }).promise;
+    return c.toDataURL('image/jpeg', 0.8);
+  } catch { return undefined; }
+}
+
 async function closeDoc(d: Doc) {
+  if (editing) commitEditor();
   docs = docs.filter((x) => x !== d);
   history.delete(d.id);
-  await store.delDoc(d.id);
+  await store.putDoc(d);
+  const had = (await getRecents()).find((r) => r.id === d.id)?.thumb;
+  await noteRecent(d, had ?? (await recentThumb(d)));
   const used = new Set(docs.flatMap((x) => x.pages.map((p) => p.src)));
   for (const sid of new Set(d.pages.map((p) => p.src))) {
     if (!used.has(sid)) {
       (sources.get(sid)?.pdf as any)?.loadingTask?.destroy?.();
       closeInRenderer(sid);
       for (const k of [...proxyCache.keys()]) if (k.startsWith(sid + '|')) proxyCache.delete(k);
+      for (const k of [...ocgCfg.keys()]) if (k.includes(sid)) ocgCfg.delete(k);
       sources.delete(sid);
-      await store.delSource(sid);
     }
   }
   await store.putMeta('open', { ids: docs.map((x) => x.id), active: docs[0]?.id });
@@ -345,6 +520,7 @@ async function closeDoc(d: Doc) {
     doc = null;
     await activate(docs[docs.length - 1] ?? null);
   } else renderTabs();
+  pruneStore().catch(() => {});
 }
 
 async function activate(d: Doc | null) {
@@ -359,22 +535,27 @@ async function activate(d: Doc | null) {
   renderLeft();
   renderRight();
   updateStatus();
-  if (d) store.putMeta('open', { ids: docs.map((x) => x.id), active: d.id });
+  if (d) {
+    store.putMeta('open', { ids: docs.map((x) => x.id), active: d.id });
+    getRecents().then((list) => {
+      const r = list.find((x) => x.id === d.id);
+      if (r?.thumb) return noteRecent(d);
+      return recentThumb(d).then((t) => noteRecent(d, t));
+    }).catch(() => {});
+  }
 }
 
 function renderTabs() {
   const tabs = $('#tabs');
   tabs.innerHTML = '';
   for (const d of docs) {
-    const t = h(`<div class="tab ${d === doc ? 'active' : ''}" title="${esc(d.name)}"><span>${esc(d.name)}</span><button title="Close">×</button></div>`);
+    const t = h(`<div class="tab ${d === doc ? 'active' : ''}" role="tab" aria-selected="${d === doc}" tabindex="0" data-tip="${esc(d.name)} · ${d.pages.length} page${d.pages.length === 1 ? '' : 's'}">${ICONS.file}<span class="nm">${esc(d.name)}</span><button class="x" aria-label="Close ${esc(d.name)}">${ICONS.close}</button></div>`);
     t.onclick = (e) => {
-      if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+      if ((e.target as HTMLElement).closest('button')) return;
       if (d !== doc) activate(d);
     };
-    t.querySelector('button')!.onclick = async () => {
-      if (d.markups.length && !confirm(`Close "${d.name}"? Its markups are only kept if you saved the PDF.`)) return;
-      closeDoc(d);
-    };
+    t.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (d !== doc) activate(d); } };
+    t.querySelector('button')!.onclick = () => closeDoc(d);
     tabs.appendChild(t);
   }
 }
@@ -524,12 +705,13 @@ const getProxy = (ref: PageRef) => {
 
 async function buildViewer(keepScroll = false) {
   const st = { l: viewer.scrollLeft, t: viewer.scrollTop };
-  $('.empty', viewer)?.remove();
+  $('#start')?.remove();
+  app.classList.toggle('no-doc', !doc);
   if (!doc) {
     for (const v of views) releaseView(v);
     views = [];
     pagesEl.innerHTML = '';
-    viewer.appendChild(startScreen());
+    stage.appendChild(startScreen());
     $('#page-count').textContent = '0';
     return;
   }
@@ -585,9 +767,54 @@ async function buildViewer(keepScroll = false) {
   scheduleRender(0);
 }
 
+const ago = (t: number) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const hrs = Math.round(m / 60);
+  if (hrs < 24) return `${hrs} h ago`;
+  const days = Math.round(hrs / 24);
+  return days < 7 ? `${days} d ago` : new Date(t).toLocaleDateString();
+};
 function startScreen() {
-  const el = h(`<div class="empty"><div class="card"><h2>PlanMark</h2><button class="btn primary" id="empty-open">Open files…</button></div></div>`);
+  const el = h(`<div class="start" id="start">
+    <div class="hero">${LOGO(52)}
+      <h1>Mark up and measure<br>plan sheets.</h1>
+      <p>Calibrate any sheet, trace boundaries, buffers and streams, and read lengths, square feet and acres right on the page.</p>
+      <div class="drop" id="start-drop">
+        <div class="dic">${ICONS.drop}</div>
+        <b>Drop PDFs or images here</b>
+        <span>PDF, PNG, JPG and TIFF. Nothing is uploaded.</span>
+        <div class="qa">
+          <button class="btn primary" id="empty-open">${ICONS.open}Open files… <kbd>${MOD}O</kbd></button>
+          <button class="btn" id="start-combine">${ICONS.combine}Combine</button>
+          <button class="btn" id="start-images">${ICONS.image}Images to PDF</button>
+        </div>
+      </div>
+    </div>
+    <div class="recent"><h3>Recent <button class="link" id="recent-clear" hidden>Clear</button></h3><div id="recent-list"><p class="muted">Files you open show up here, so you can pick up where you left off.</p></div></div>
+    <div class="foot"><span class="local">${ICONS.shield}Everything runs on this device. No account, no upload.</span><span class="kb"><span><kbd>?</kbd> Shortcuts</span></span></div>
+  </div>`);
   $('#empty-open', el).onclick = () => $<HTMLInputElement>('#file-open').click();
+  $('#start-combine', el).onclick = () => openCombineDialog();
+  $('#start-images', el).onclick = () => $<HTMLInputElement>('#file-images').click();
+  getRecents().then((list) => {
+    const box = $('#recent-list', el);
+    if (!list.length) return;
+    box.innerHTML = '';
+    $('#recent-clear', el).hidden = false;
+    for (const r of list) {
+      const row = h(`<button class="rc" data-recent="${r.id}">${r.thumb ? `<img src="${r.thumb}" alt="">` : `<span class="rc-ph">${ICONS.file}</span>`}<span class="rc-t"><b>${esc(r.name)}</b><span>${r.pages} page${r.pages === 1 ? '' : 's'} · ${fmtBytes(r.bytes)} · ${ago(r.when)}</span></span></button>`);
+      row.onclick = () => openRecent(r.id);
+      box.appendChild(row);
+    }
+  });
+  $('#recent-clear', el).onclick = async () => {
+    await store.putMeta('recent', (await getRecents()).filter((r) => docs.some((d) => d.id === r.id)));
+    await pruneStore();
+    $('#recent-list', el).innerHTML = '<p class="muted">Cleared. Stored copies of closed files were removed from this browser.</p>';
+    $('#recent-clear', el).hidden = true;
+  };
   return el;
 }
 
@@ -831,16 +1058,20 @@ function setZoom(z: number, anchor?: { x: number; y: number }) {
   scheduleRenderAfterZoom();
   if (editing) positionEditor();
 }
+// The tool rail floats over the left edge and the status capsule over the bottom of the viewer;
+// .pages padding (styles.css) leaves room for them, and fits use the same numbers.
+const PAD_X = 76 + 28 + 8, PAD_Y = 24 + 76;
 function fitWidth() {
   const v = views[currentPage] ?? views[0];
   if (!v) return;
-  setZoom(((viewer.clientWidth - 64) / v.vp1.width) * (72 / 96));
+  setZoom(((viewer.clientWidth - PAD_X) / v.vp1.width) * (72 / 96));
   v.el.scrollIntoView({ block: 'start' });
+  viewer.scrollTop -= 16;
 }
 function fitPage() {
   const v = views[currentPage] ?? views[0];
   if (!v) return;
-  setZoom(Math.min((viewer.clientWidth - 64) / v.vp1.width, (viewer.clientHeight - 56) / v.vp1.height) * (72 / 96));
+  setZoom(Math.min((viewer.clientWidth - PAD_X) / v.vp1.width, (viewer.clientHeight - PAD_Y) / v.vp1.height) * (72 / 96));
   v.el.scrollIntoView({ block: 'center' });
 }
 function goToPage(i: number) {
@@ -997,7 +1228,7 @@ function setTool(t: ToolId) {
   cancelDraft();
   countTarget = null;
   tool = t;
-  $$('.tool').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
+  $$('.tool').forEach((b) => { b.classList.toggle('active', b.dataset.tool === t); b.setAttribute('aria-pressed', String(b.dataset.tool === t)); });
   viewer.classList.toggle('tool-pan', t === 'pan');
   viewer.classList.toggle('tool-select', t === 'select');
   viewer.classList.toggle('tool-draw', t !== 'pan' && t !== 'select');
@@ -1429,6 +1660,7 @@ window.addEventListener('keydown', (e) => {
   if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); setZoom(zoom * 1.25); return; }
   if (mod && e.key === '-') { e.preventDefault(); setZoom(zoom / 1.25); return; }
   if (mod) return;
+  if (e.key === '?') { e.preventDefault(); openShortcuts(); return; }
   if (e.key === ' ') { spaceDown = true; viewer.classList.add('panning'); e.preventDefault(); return; }
   if (e.key === 'Escape') { cancelDraft(); countTarget = null; selection.clear(); redrawSelection(); renderRight(); return; }
   if (e.key === 'Enter' && draft && MULTI_POINT.includes(draft.type)) { finishDraft(); return; }
@@ -1491,7 +1723,7 @@ function thumbBox(i: number) {
   return { w: Math.round(v.vp1.width * k), h: Math.round(v.vp1.height * k) };
 }
 function renderLeft() {
-  $$('[data-lt]').forEach((b) => b.classList.toggle('active', b.dataset.lt === leftTab));
+  $$('[data-lt]').forEach((b) => { b.classList.toggle('active', b.dataset.lt === leftTab); b.setAttribute('aria-selected', String(b.dataset.lt === leftTab)); });
   $('#page-tools').style.display = leftTab === 'pages' && doc ? '' : 'none';
   const body = $('#left-body');
   if (leftTab === 'chest' || !doc) {
@@ -1500,7 +1732,7 @@ function renderLeft() {
     thumbEls.clear();
     body.innerHTML = '';
     if (leftTab === 'chest') return renderChest(body);
-    body.innerHTML = '<p class="muted small">No document open.</p>';
+    body.innerHTML = '<p class="muted small" style="padding:4px 6px">Open a file to see its pages.</p>';
     return;
   }
   let list = $('#thumbs', body);
@@ -1728,10 +1960,11 @@ function mergeInto(dst: Doc, src: Doc, at: number) {
 }
 
 function renderChest(body: HTMLElement) {
-  body.appendChild(h('<p class="muted small">Saved tool presets. Set up a style in Properties, then use "Save as preset". Click a preset to use it.</p>'));
-  if (!presets.length) body.appendChild(h('<p class="muted small"><i>No presets yet.</i></p>'));
+  body.appendChild(h(`<p class="muted small">Styles you use often. Set one up in Style, then choose "Save to Tool Chest". Click a style to draw with it.</p>`));
+  if (!presets.length) body.appendChild(h('<div class="chest-empty">' + ICONS.chest + '<span>Nothing saved yet</span></div>'));
   for (const pr of presets) {
-    const el = h(`<div class="preset" data-preset="${pr.id}">${ICONS[pr.tool]}<span class="swatch" style="background:${pr.style.fill ?? pr.style.stroke}"></span><span class="nm">${esc(pr.name)}</span><button class="btn" title="Delete">×</button></div>`);
+    const el = h(`<div class="preset" data-preset="${pr.id}" tabindex="0" role="button"><span class="mic" style="--c:${pr.style.fill ?? pr.style.stroke}">${ICONS[pr.tool]}</span><span class="nm">${esc(pr.name)}<small>${TYPE_LABEL[pr.tool]}</small></span><button class="ib sm faint" aria-label="Delete ${esc(pr.name)}" data-tip="Delete">${ICONS.close}</button></div>`);
+    const use = () => { toolStyles[pr.tool] = clone(pr.style); saveToolStyles(); setTool(pr.tool); toast(`Drawing with "${pr.name}"`); };
     el.onclick = (e) => {
       if ((e.target as HTMLElement).closest('button')) {
         presets = presets.filter((x) => x.id !== pr.id);
@@ -1739,18 +1972,16 @@ function renderChest(body: HTMLElement) {
         renderLeft();
         return;
       }
-      toolStyles[pr.tool] = clone(pr.style);
-      saveToolStyles();
-      setTool(pr.tool);
-      toast(`Using preset "${pr.name}"`);
+      use();
     };
+    el.onkeydown = (e) => { if (e.key === 'Enter') use(); };
     body.appendChild(el);
   }
 }
 
 // ───────────────────────── right panel ─────────────────────────
 function renderRight() {
-  $$('[data-rt]').forEach((b) => b.classList.toggle('active', b.dataset.rt === rightTab));
+  $$('[data-rt]').forEach((b) => { b.classList.toggle('active', b.dataset.rt === rightTab); b.setAttribute('aria-selected', String(b.dataset.rt === rightTab)); });
   const body = $('#right-body');
   const st = body.scrollTop;
   body.innerHTML = '';
@@ -1764,29 +1995,59 @@ function renderRight() {
 const DASH_OPTS = [['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted'], ['cloud', 'Cloud border']];
 const HEAD_OPTS = [['none', 'None'], ['open', 'Open arrow'], ['closed', 'Closed arrow'], ['circle', 'Dot'], ['square', 'Square'], ['slash', 'Slash / tick']];
 const opts = (o: string[][], v: string) => o.map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${l}</option>`).join('');
+// Field-friendly palette: survey red, wetland green, water blue, buffer violet, soils orange, plus ink.
+const SWATCHES: [string, string][] = [['#e11d48', 'Red'], ['#f97316', 'Orange'], ['#facc15', 'Yellow'], ['#16a34a', 'Green'], ['#0ea5e9', 'Sky'], ['#1d4ed8', 'Blue'], ['#7c3aed', 'Violet'], ['#111827', 'Ink']];
+const WIDTHS = [0.5, 1, 1.5, 2, 3, 5];
+const dashArray = (d: string, w: number) => (d === 'dashed' ? `${w * 4} ${w * 3}` : d === 'dotted' ? `${Math.max(w, 0.1)} ${w * 2.2}` : '');
+/** Live sample of the current style, drawn the way the markup will look. */
+function stylePreview(type: MarkupType, st: Style) {
+  const sw = Math.max(0.6, Math.min(st.width, 6)) * 1.6;
+  const da = dashArray(st.dash, sw);
+  const stroke = `stroke="${st.stroke}" stroke-opacity="${st.opacity}" stroke-width="${st.width ? sw : 0}" ${da ? `stroke-dasharray="${da}"` : ''} stroke-linecap="round" stroke-linejoin="round"`;
+  const fill = st.fill ? `fill="${st.fill}" fill-opacity="${st.fillOpacity}"` : 'fill="none"';
+  let body: string;
+  if (type === 'highlight') body = `<rect x="24" y="20" width="192" height="28" rx="2" fill="${st.fill ?? st.stroke}" fill-opacity="${st.fillOpacity}"/>`;
+  else if (type === 'text' || type === 'callout') body = `<rect x="70" y="10" width="140" height="44" rx="3" ${fill} ${stroke}/><text x="82" y="38" font-size="${Math.min(st.fontSize * 1.3, 22)}" fill="${st.textColor}" font-family="Helvetica, Arial">Note</text>${type === 'callout' ? `<path d="M70 40 L22 58" ${stroke} fill="none"/>` : ''}`;
+  else if (['rect', 'ellipse', 'cloud', 'polygon', 'm-area', 'm-perimeter'].includes(type)) {
+    const shape = type === 'ellipse' ? `<ellipse cx="120" cy="34" rx="92" ry="24" ${fill} ${stroke}/>` : type === 'rect' ? `<rect x="28" y="10" width="184" height="48" rx="2" ${fill} ${stroke}/>` : `<path d="M30 52 L58 12 L150 18 L210 40 L160 58 Z" ${fill} ${stroke}/>`;
+    body = shape;
+  } else if (type === 'pen') body = `<path d="M20 48 C 60 10, 90 60, 130 30 S 200 20, 220 36" fill="none" ${stroke}/>`;
+  else if (type === 'm-count') body = [40, 90, 140, 190].map((x) => `<circle cx="${x}" cy="34" r="9" fill="${st.fill ?? st.stroke}" fill-opacity="${st.opacity}"/>`).join('');
+  else body = `<path d="M24 50 L120 18 L216 40" fill="none" ${stroke}/>`;
+  return `<svg viewBox="0 0 240 68" class="preview-svg" aria-hidden="true">${body}</svg>`;
+}
+function swatchRow(forId: string, value: string, label: string) {
+  const known = SWATCHES.some(([c]) => c.toLowerCase() === value.toLowerCase());
+  return `<div class="swatches" data-for="${forId}" role="radiogroup" aria-label="${label}">${SWATCHES.map(([c, n]) => `<button class="sw ${c.toLowerCase() === value.toLowerCase() ? 'on' : ''}" style="--c:${c}" data-c="${c}" role="radio" aria-checked="${c.toLowerCase() === value.toLowerCase()}" aria-label="${n}" data-tip="${n}"></button>`).join('')}<label class="sw custom ${known ? '' : 'on'}" style="${known ? '' : `--c:${value}`}" data-tip="Custom colour"><input type="color" id="${forId}" value="${value}" aria-label="Custom ${label.toLowerCase()}"></label></div>`;
+}
+const pctSlider = (id: string, v: number, c: string) => `<div class="slider"><input type="range" id="${id}" min="0" max="100" value="${Math.round(v * 100)}" style="--v:${Math.round(v * 100)}%;--c:${c}"><output>${Math.round(v * 100)}%</output></div>`;
 
 function renderProps(body: HTMLElement) {
   const sel = doc ? doc.markups.filter((m) => selection.has(m.id)) : [];
   const drawTool = tool !== 'select' && tool !== 'pan' && tool !== 'calibrate' ? (tool as MarkupType) : null;
   if (!sel.length && !drawTool) {
-    body.innerHTML = `<h4>Properties</h4><p class="muted small">Select a markup to edit it, or pick a markup tool to set its default style.</p>
-      <h4>Your name (author on markups)</h4><div class="row"><input type="text" id="p-author" value="${esc(author)}" placeholder="e.g. A. Pocta"></div>
-      <h4>Shortcuts</h4><p class="muted small" style="line-height:1.6">V select · H pan (or hold Space) · P pen · L line · A arrow · Y polyline · G polygon · R rect · E ellipse · C cloud · T text · Q callout · I highlight · K calibrate · 1 length · 2 polylength · 3 perimeter · 4 area · 5 count<br>Double-click or Enter finishes polylines/areas; Backspace removes the last point; Shift constrains to 45°; Ctrl/⌘+wheel zooms; Delete removes; Ctrl+Z / Ctrl+Y undo/redo; Ctrl+C / Ctrl+V copy/paste.</p>`;
+    body.innerHTML = `<div class="ph"><div class="ph-ic" style="--c:var(--ac)">${ICONS.sliders}</div><div><div class="ph-t">Style</div><div class="ph-s">Nothing selected</div></div></div>
+      <p class="muted">Select a markup to change it, or pick a tool to set how new markups look.</p>
+      <section><h4>Your name</h4><div class="field"><input type="text" id="p-author" value="${esc(author)}" placeholder="Shown as the author on markups" aria-label="Your name"></div></section>
+      <section><h4>Shortcuts</h4><p class="muted small">Press <kbd>?</kbd> for the full list. Tools have single-key shortcuts; hover a tool to see it.</p></section>`;
     $<HTMLInputElement>('#p-author', body).onchange = (e) => { author = (e.target as HTMLInputElement).value; localStorage.setItem('pm.author', author); };
     return;
   }
   const first = sel[0];
   const st: Style = first ? first.style : toolStyles[drawTool!];
   const type: MarkupType = first ? first.type : drawTool!;
-  const title = first ? (sel.length > 1 ? `${sel.length} markups selected` : TYPE_LABEL[first.type]) : `${TYPE_LABEL[drawTool!]} — tool defaults`;
+  const title = first ? (sel.length > 1 ? `${sel.length} markups` : TYPE_LABEL[first.type]) : TYPE_LABEL[drawTool!];
+  const sub = first ? (sel.length > 1 ? 'Changes apply to all of them' : `Page ${(doc!.pages.findIndex((p) => p.uid === first.page) + 1) || '?'} · ${esc(doc!.layers.find((l) => l.id === first.layer)?.name ?? '')}`) : 'Style for new markups';
   let measureHtml = '';
   if (first && sel.length === 1 && isMeasure(first.type)) {
     const v = viewOf(first.page);
-    const mv = measureOf(first, scaleOf(v?.ref));
+    const sc = scaleOf(v?.ref);
+    const mv = measureOf(first, sc);
     if (mv) {
-      measureHtml = `<div class="measure-box" id="p-measure"><b>${esc(mv.kind === 'area' ? `${fmtNum(mv.value, scaleOf(v?.ref).precision)} ${mv.unit}` : mv.text)}</b>`;
-      if (mv.kind === 'area') measureHtml += `<div>${fmtNum(mv.area2!, 4)} ${mv.area2Unit === 'ac' ? 'acres' : 'hectares'}</div><div class="muted small">Perimeter ${fmtNum(mv.perimeter!, 2)} ${UNIT_LABEL[scaleOf(v?.ref).unit]}</div>`;
-      measureHtml += `<div class="muted small">Scale: ${esc(scaleOf(v?.ref).label)}</div></div>`;
+      const main = mv.kind === 'area' ? [fmtNum(mv.value, sc.precision), mv.unit] : mv.kind === 'count' ? [String(mv.value), mv.value === 1 ? 'item' : 'items'] : (() => { const m = mv.text.match(/^([\d.,\-]+)\s*(.*)$/); return m ? [m[1], m[2]] : [mv.text, '']; })();
+      measureHtml = `<div class="measure" id="p-measure"><div class="m-main"><span class="m-v">${esc(main[0])}</span> <span class="m-u">${esc(main[1])}</span></div>`;
+      if (mv.kind === 'area') measureHtml += `<div class="m-sub"><b>${fmtNum(mv.area2!, 4)}</b> ${mv.area2Unit === 'ac' ? 'acres' : 'hectares'}<i class="dotsep"></i>perimeter <b>${fmtNum(mv.perimeter!, 2)}</b> ${UNIT_LABEL[sc.unit]}</div>`;
+      measureHtml += `<div class="m-scale">${ICONS.scale}<span>${esc(sc.label)}${v?.ref.scale ? '' : ' (not calibrated)'}</span><button class="link" id="p-goscale">Change</button></div></div>`;
     }
   }
   const showFill = !['pen', 'line', 'arrow', 'polyline', 'm-length', 'm-polylength', 'm-perimeter'].includes(type);
@@ -1794,36 +2055,50 @@ function renderProps(body: HTMLElement) {
   const showText = ['text', 'callout'].includes(type) || isMeasure(type);
   const layerOpts = doc ? doc.layers.map((l) => `<option value="${l.id}" ${first?.layer === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('') : '';
   body.innerHTML = `
-    <h4>${esc(title)}</h4>${measureHtml}
-    <div class="row"><label>Line color</label><input type="color" id="p-stroke" value="${st.stroke}"></div>
-    ${showFill ? `<div class="row"><label>Fill</label><input type="checkbox" id="p-fill-on" ${st.fill ? 'checked' : ''}><input type="color" id="p-fill" value="${st.fill ?? '#ffffff'}"></div>` : ''}
-    <div class="row"><label>Line opacity</label><input type="range" id="p-opacity" min="0" max="100" value="${Math.round(st.opacity * 100)}"><span class="val">${Math.round(st.opacity * 100)}%</span></div>
-    ${showFill ? `<div class="row"><label>Fill opacity</label><input type="range" id="p-fill-opacity" min="0" max="100" value="${Math.round(st.fillOpacity * 100)}"><span class="val">${Math.round(st.fillOpacity * 100)}%</span></div>` : ''}
-    <div class="row"><label>Line width (pt)</label><input type="number" id="p-width" min="0" max="72" step="0.25" value="${st.width}"></div>
-    <div class="row"><label>Line style</label><select id="p-dash">${opts(DASH_OPTS, st.dash)}</select></div>
-    ${showHeads ? `<div class="row"><label>Start</label><select id="p-start">${opts(HEAD_OPTS, st.startHead)}</select></div><div class="row"><label>End</label><select id="p-end">${opts(HEAD_OPTS, st.endHead)}</select></div>` : ''}
-    ${showText ? `<div class="row"><label>Font size</label><input type="number" id="p-font" min="4" max="144" step="1" value="${st.fontSize}"></div>` : ''}
-    ${['text', 'callout'].includes(type) ? `<div class="row"><label>Text color</label><input type="color" id="p-textcolor" value="${st.textColor}"></div>` : ''}
-    ${first ? `<h4>Markup</h4><div class="row"><label>Layer</label><select id="p-layer">${layerOpts}</select></div>
-      <div class="row"><label>Comment</label><input type="text" id="p-comment" value="${esc(first.comment ?? '')}" placeholder="Note / label"></div>
-      ${sel.length === 1 && ['text', 'callout'].includes(first.type) ? '<div class="btn-row"><button class="btn" id="p-edit-text">Edit text</button></div>' : ''}
-      <div class="btn-row"><button class="btn" id="p-make-default">Use as tool default</button><button class="btn danger" id="p-delete">Delete</button></div>` : ''}
-    <div class="btn-row"><button class="btn" id="p-preset">Save as preset…</button>${!first ? '<button class="btn" id="p-reset">Reset tool style</button>' : ''}</div>
+    <div class="ph"><div class="ph-ic" style="--c:${st.stroke}">${ICONS[type] ?? ''}</div><div><div class="ph-t">${esc(title)}</div><div class="ph-s">${sub}</div></div></div>
+    ${measureHtml}
+    <div class="preview" id="p-preview">${stylePreview(type, st)}</div>
+    <section><h4>Line</h4>
+      ${swatchRow('p-stroke', st.stroke, 'Line colour')}
+      <div class="field"><label for="p-opacity">Opacity</label>${pctSlider('p-opacity', st.opacity, st.stroke)}</div>
+      <div class="field"><label>Width</label><div class="seg widths" role="radiogroup" aria-label="Line width">${WIDTHS.map((w) => `<button data-w="${w}" class="${Math.abs(st.width - w) < 0.01 ? 'on' : ''}" role="radio" aria-checked="${Math.abs(st.width - w) < 0.01}" aria-label="${w} pt"><svg viewBox="0 0 26 12"><path d="M2 6h22" stroke="currentColor" stroke-width="${Math.min(w * 1.3, 7)}" stroke-linecap="round"/></svg><span>${w}</span></button>`).join('')}</div></div>
+      <div class="field"><label for="p-width">Exact</label><div class="numbox"><input type="number" id="p-width" min="0" max="72" step="0.25" value="${st.width}"><span>pt</span></div></div>
+      <div class="field"><label>Style</label><div class="seg dashes" role="radiogroup" aria-label="Line style">${DASH_OPTS.map(([k, l]) => `<button data-dash="${k}" class="${st.dash === k ? 'on' : ''}" role="radio" aria-checked="${st.dash === k}" aria-label="${l}" data-tip="${l}">${k === 'cloud' ? `<svg viewBox="0 0 40 12"><path d="M2 9a4 4 0 018 0a4 4 0 018 0a4 4 0 018 0a4 4 0 018 0" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>` : `<svg viewBox="0 0 40 12"><path d="M3 6h34" stroke="currentColor" stroke-width="2" stroke-linecap="round" ${dashArray(k, 2) ? `stroke-dasharray="${dashArray(k, 2)}"` : ''}/></svg>`}</button>`).join('')}</div></div>
+      <select id="p-dash" hidden aria-hidden="true" tabindex="-1">${opts(DASH_OPTS, st.dash)}</select>
+      ${showHeads ? `<div class="field"><label for="p-start">Start</label><select id="p-start">${opts(HEAD_OPTS, st.startHead)}</select></div><div class="field"><label for="p-end">End</label><select id="p-end">${opts(HEAD_OPTS, st.endHead)}</select></div>` : ''}
+    </section>
+    ${showFill ? `<section><h4>Fill <label class="switch"><input type="checkbox" id="p-fill-on" ${st.fill ? 'checked' : ''} aria-label="Fill on"><i></i></label></h4>
+      <div class="${st.fill ? '' : 'dim'}">${swatchRow('p-fill', st.fill ?? '#ffffff', 'Fill colour')}
+      <div class="field"><label for="p-fill-opacity">Opacity</label>${pctSlider('p-fill-opacity', st.fillOpacity, st.fill ?? st.stroke)}</div></div></section>` : ''}
+    ${showText ? `<section><h4>Text</h4><div class="field"><label for="p-font">Size</label><div class="numbox"><input type="number" id="p-font" min="4" max="144" step="1" value="${st.fontSize}"><span>pt</span></div></div>
+      ${['text', 'callout'].includes(type) ? `<div class="field"><label>Colour</label>${swatchRow('p-textcolor', st.textColor, 'Text colour')}</div>` : ''}</section>` : ''}
+    ${first ? `<section><h4>Markup</h4><div class="field"><label for="p-layer">Layer</label><select id="p-layer">${layerOpts}</select></div>
+      <div class="field"><label for="p-comment">Note</label><input type="text" id="p-comment" value="${esc(first.comment ?? '')}" placeholder="Label or comment"></div>
+      <div class="pf">${sel.length === 1 && ['text', 'callout'].includes(first.type) ? '<button class="btn" id="p-edit-text">Edit text</button>' : ''}<button class="btn" id="p-make-default" data-tip="New ${esc(TYPE_LABEL[first.type])} markups will look like this">Make default</button><button class="btn danger" id="p-delete">${ICONS.trash}Delete</button></div></section>` : ''}
+    <div class="pf"><button class="btn" id="p-preset">${ICONS.chest}Save to Tool Chest</button>${!first ? '<button class="btn ghost" id="p-reset">Reset</button>' : ''}</div>
   `;
   const apply = (fn: (s: Style) => void) => {
     if (sel.length) mutate(() => sel.forEach((m) => { fn(m.style); m.modified = Date.now(); }));
-    else { fn(toolStyles[drawTool!]); saveToolStyles(); }
+    else { fn(toolStyles[drawTool!]); saveToolStyles(); renderRight(); }
   };
   const bind = (id: string, ev: string, fn: (el: HTMLInputElement) => void) => {
     const el = $<HTMLInputElement>(`#${id}`, body);
     if (el) el.addEventListener(ev, () => fn(el));
   };
+  const fire = (el: HTMLElement) => el.dispatchEvent(new Event('change', { bubbles: true }));
+  $$('.swatches', body).forEach((row) => {
+    const input = $<HTMLInputElement>(`#${row.dataset.for}`, row);
+    $$('.sw[data-c]', row).forEach((b) => (b.onclick = () => { input.value = b.dataset.c!; fire(input); }));
+  });
+  $$('.seg.widths button', body).forEach((b) => (b.onclick = () => { const i = $<HTMLInputElement>('#p-width', body); i.value = b.dataset.w!; fire(i); }));
+  $$('.seg.dashes button', body).forEach((b) => (b.onclick = () => { const i = $<HTMLSelectElement>('#p-dash', body); i.value = b.dataset.dash!; fire(i); }));
+  const slide = (el: HTMLInputElement) => { el.style.setProperty('--v', `${el.value}%`); el.nextElementSibling!.textContent = `${el.value}%`; };
   bind('p-stroke', 'change', (el) => apply((s) => (s.stroke = el.value)));
-  bind('p-fill-on', 'change', (el) => apply((s) => (s.fill = el.checked ? $<HTMLInputElement>('#p-fill', body).value : null)));
-  bind('p-fill', 'change', (el) => { $<HTMLInputElement>('#p-fill-on', body).checked = true; apply((s) => (s.fill = el.value)); });
-  bind('p-opacity', 'input', (el) => (el.nextElementSibling!.textContent = `${el.value}%`));
+  bind('p-fill-on', 'change', (el) => apply((s) => (s.fill = el.checked ? $<HTMLInputElement>('#p-fill', body)?.value ?? '#ffffff' : null)));
+  bind('p-fill', 'change', (el) => { const on = $<HTMLInputElement>('#p-fill-on', body); if (on) on.checked = true; apply((s) => (s.fill = el.value)); });
+  bind('p-opacity', 'input', slide);
   bind('p-opacity', 'change', (el) => apply((s) => (s.opacity = +el.value / 100)));
-  bind('p-fill-opacity', 'input', (el) => (el.nextElementSibling!.textContent = `${el.value}%`));
+  bind('p-fill-opacity', 'input', slide);
   bind('p-fill-opacity', 'change', (el) => apply((s) => (s.fillOpacity = +el.value / 100)));
   bind('p-width', 'change', (el) => apply((s) => (s.width = Math.max(0, +el.value || 0))));
   bind('p-dash', 'change', (el) => apply((s) => (s.dash = el.value as Style['dash'])));
@@ -1833,17 +2108,18 @@ function renderProps(body: HTMLElement) {
   bind('p-textcolor', 'change', (el) => apply((s) => (s.textColor = el.value)));
   bind('p-layer', 'change', (el) => mutate(() => sel.forEach((m) => (m.layer = el.value))));
   bind('p-comment', 'change', (el) => mutate(() => sel.forEach((m) => (m.comment = el.value))));
+  $('#p-goscale', body)?.addEventListener('click', () => { rightTab = 'scale'; renderRight(); });
   $('#p-edit-text', body)?.addEventListener('click', () => openEditor(first.id, false));
   $('#p-delete', body)?.addEventListener('click', deleteSelection);
-  $('#p-make-default', body)?.addEventListener('click', () => { toolStyles[first.type] = clone(first.style); saveToolStyles(); toast(`${TYPE_LABEL[first.type]} tool now uses this style`); });
+  $('#p-make-default', body)?.addEventListener('click', () => { toolStyles[first.type] = clone(first.style); saveToolStyles(); toast(`New ${TYPE_LABEL[first.type].toLowerCase()} markups will use this style`); });
   $('#p-reset', body)?.addEventListener('click', () => { toolStyles[drawTool!] = clone(DEFAULT_STYLES[drawTool!]); saveToolStyles(); renderRight(); });
   $('#p-preset', body)?.addEventListener('click', () => {
-    const name = prompt('Preset name', `${TYPE_LABEL[type]} ${presets.filter((p) => p.tool === type).length + 1}`);
+    const name = prompt('Name this style', `${TYPE_LABEL[type]} ${presets.filter((p) => p.tool === type).length + 1}`);
     if (!name) return;
     presets.push({ id: uid(), name, tool: type, style: clone(st) });
     savePresets();
     if (leftTab === 'chest') renderLeft();
-    toast(`Saved preset "${name}" to the Tool Chest`);
+    toast(`Saved "${name}" to the Tool Chest`);
   });
 }
 
@@ -1876,41 +2152,51 @@ function totalsOf(rows: Row[]) {
 }
 let listFilter: 'all' | 'page' | 'measure' = 'all';
 function renderMarkupList(body: HTMLElement) {
-  if (!doc) { body.innerHTML = '<p class="muted small">No document open.</p>'; return; }
+  if (!doc) { body.innerHTML = '<p class="muted">No document open.</p>'; return; }
   let rows = markupRows();
   if (listFilter === 'page') rows = rows.filter((r) => r.pageNo === currentPage + 1);
   if (listFilter === 'measure') rows = rows.filter((r) => r.mv);
   const t = totalsOf(rows);
+  const layerName = (id: string) => doc!.layers.find((l) => l.id === id)?.name ?? '';
   body.innerHTML = `
-    <div class="row"><select id="ml-filter"><option value="all">All markups</option><option value="page">Current page</option><option value="measure">Measurements only</option></select>
-      <button class="btn" id="ml-csv">Export CSV</button></div>
-    <table class="mlist" id="mlist"><thead><tr><th>Pg</th><th>Type</th><th>Value / text</th><th>Layer</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr data-id="${r.m.id}" class="${selection.has(r.m.id) ? 'sel' : ''}"><td>${r.pageNo}</td><td><span class="swatch" style="background:${r.m.style.fill && r.m.type !== 'm-perimeter' ? r.m.style.fill : r.m.style.stroke}"></span>${TYPE_LABEL[r.m.type]}</td><td class="val">${esc(r.mv?.text ?? (r.m.text || r.m.comment || ''))}${r.mv && r.m.comment ? `<div class="muted small">${esc(r.m.comment)}</div>` : ''}</td><td>${esc(doc!.layers.find((l) => l.id === r.m.layer)?.name ?? '')}</td></tr>`).join('')}
-    </tbody></table>
-    ${rows.length ? '' : '<p class="muted small">No markups yet.</p>'}
-    <div class="totals" id="ml-totals"><b>Totals</b>
-      ${[...t.len].map(([u, v]) => `<div><span>Length</span><span>${fmtNum(v)} ${u}</span></div>`).join('')}
-      ${[...t.area].map(([u, v]) => `<div><span>Area</span><span>${fmtNum(v.v)} ${u}</span></div><div><span></span><span>${fmtNum(v.a2, 4)} ${v.a2u}</span></div>`).join('')}
-      ${t.count ? `<div><span>Count</span><span>${t.count}</span></div>` : ''}
+    <div class="mfilter"><select id="ml-filter" aria-label="Show"><option value="all">All markups</option><option value="page">This page</option><option value="measure">Measurements</option></select>
+      <button class="btn" id="ml-csv" data-tip="Download every markup and measurement as a spreadsheet">${ICONS.export}CSV</button></div>
+    <div class="mlist" id="mlist" role="listbox" aria-label="Markups">
+    ${rows.map((r) => {
+      const c = r.m.style.fill && r.m.type !== 'm-perimeter' ? r.m.style.fill : r.m.style.stroke;
+      const val = r.mv ? (r.mv.kind === 'area' ? `${fmtNum(r.mv.value, r.scale.precision)} <small>${r.mv.unit} · ${fmtNum(r.mv.area2!, 3)} ${r.mv.area2Unit}</small>` : esc(r.mv.text)) : '';
+      const note = r.m.comment || r.m.text || layerName(r.m.layer);
+      return `<div class="mrow ${selection.has(r.m.id) ? 'on' : ''}" data-id="${r.m.id}" role="option" aria-selected="${selection.has(r.m.id)}" tabindex="0"><span class="mic" style="--c:${c}">${ICONS[r.m.type] ?? ''}</span><span class="mt"><b>${TYPE_LABEL[r.m.type]}</b><small>p.${r.pageNo} · ${esc(note)}</small></span><span class="mv">${val}</span></div>`;
+    }).join('')}
+    </div>
+    ${rows.length ? '' : '<p class="muted">No markups yet. Pick a tool on the left and draw on the sheet.</p>'}
+    <div class="totals" id="ml-totals"><h4>Totals</h4>
+      ${[...t.len].map(([u, v]) => `<div><span>Length</span><b>${fmtNum(v)} <small>${u}</small></b></div>`).join('')}
+      ${[...t.area].map(([u, v]) => `<div><span>Area</span><b>${fmtNum(v.v)} <small>${u}</small></b></div><div><span></span><b>${fmtNum(v.a2, 4)} <small>${v.a2u}</small></b></div>`).join('')}
+      ${t.count ? `<div><span>Count</span><b>${t.count}</b></div>` : ''}
       ${!t.len.size && !t.area.size && !t.count ? '<div class="muted">No measurements</div>' : ''}
     </div>`;
   $<HTMLSelectElement>('#ml-filter', body).value = listFilter;
   $<HTMLSelectElement>('#ml-filter', body).onchange = (e) => { listFilter = (e.target as HTMLSelectElement).value as typeof listFilter; renderRight(); };
   $('#ml-csv', body).onclick = exportCsv;
-  $$('tr[data-id]', body).forEach((tr) => (tr.onclick = () => {
-    const m = doc!.markups.find((x) => x.id === tr.dataset.id)!;
-    selection = new Set([m.id]);
-    const v = viewOf(m.page);
-    if (v) {
-      const b = markupBounds(m, v);
-      const [cx, cy] = v.vp1.convertToViewportPoint((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
-      const r = v.el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
-      viewer.scrollLeft += r.left + cx * ptPx() - (vr.left + vr.width / 2);
-      viewer.scrollTop += r.top + cy * ptPx() - (vr.top + vr.height / 2);
-    }
-    redrawSelection();
-    renderRight();
-  }));
+  $$('.mrow[data-id]', body).forEach((row) => {
+    const go = () => {
+      const m = doc!.markups.find((x) => x.id === row.dataset.id)!;
+      selection = new Set([m.id]);
+      const v = viewOf(m.page);
+      if (v) {
+        const b = markupBounds(m, v);
+        const [cx, cy] = v.vp1.convertToViewportPoint((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
+        const r = v.el.getBoundingClientRect(), vr = viewer.getBoundingClientRect();
+        viewer.scrollLeft += r.left + cx * ptPx() - (vr.left + vr.width / 2);
+        viewer.scrollTop += r.top + cy * ptPx() - (vr.top + vr.height / 2);
+      }
+      redrawSelection();
+      renderRight();
+    };
+    row.onclick = go;
+    row.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  });
 }
 
 function csvCell(v: unknown) {
@@ -1941,17 +2227,16 @@ function exportCsv() {
 async function renderLayers(body: HTMLElement) {
   if (!doc) { body.innerHTML = '<p class="muted small">No document open.</p>'; return; }
   const d = doc;
-  body.innerHTML = `<h4>Markup layers</h4><p class="muted small">New markups go on the highlighted layer. Saved as PDF layers (OCGs).</p><div id="app-layers"></div>
-    <div class="btn-row"><button class="btn" id="ly-add">+ New layer</button></div>
-    <h4>PDF layers in the file</h4><div id="pdf-layers"><p class="muted small">Reading…</p></div>`;
+  body.innerHTML = `<section><h4>Markup layers <button class="link" id="ly-add">${ICONS.plus}New</button></h4><p class="muted small">New markups go on the highlighted layer. They are saved as PDF layers, so other PDF apps can toggle them too.</p><div id="app-layers"></div></section>
+    <section><h4>Layers in the PDF</h4><div id="pdf-layers"><p class="muted small">Reading…</p></div></section>`;
   const al = $('#app-layers', body);
   for (const l of d.layers) {
     const n = d.markups.filter((m) => m.layer === l.id).length;
     const row = h(`<div class="layer ${l.id === d.activeLayer ? 'active' : ''}" data-layer="${l.id}">
-      <input type="checkbox" class="ly-vis" title="Show / hide" ${l.visible ? 'checked' : ''}>
-      <span class="name" title="Click to make active, double-click to rename">${esc(l.name)}</span><span class="muted small">${n}</span>
-      <button class="ly-lock" title="${l.locked ? 'Unlock' : 'Lock'}" style="opacity:${l.locked ? 1 : 0.35}">${ICONS.lock.replace('<svg', '<svg width="14" height="14"')}</button>
-      ${d.layers.length > 1 ? '<button class="ly-del" title="Delete layer (markups move to first layer)">×</button>' : ''}</div>`);
+      <input type="checkbox" class="ly-vis eye" aria-label="Show ${esc(l.name)}" data-tip="Show or hide" ${l.visible ? 'checked' : ''}>
+      <span class="name" data-tip="Click to draw on this layer. Double-click to rename.">${esc(l.name)}</span><span class="lk">${n}</span>
+      <button class="ib sm ly-lock ${l.locked ? 'on' : 'faint'}" aria-label="${l.locked ? 'Unlock' : 'Lock'} ${esc(l.name)}" data-tip="${l.locked ? 'Locked: click to unlock' : 'Lock so markups can’t be moved'}">${l.locked ? ICONS.lock : ICONS.unlock}</button>
+      ${d.layers.length > 1 ? `<button class="ib sm faint ly-del" aria-label="Delete layer ${esc(l.name)}" data-tip="Delete layer (its markups move to the first layer)">${ICONS.close}</button>` : ''}</div>`);
     $<HTMLInputElement>('.ly-vis', row).onchange = (e) => mutate(() => (l.visible = (e.target as HTMLInputElement).checked));
     $('.name', row).onclick = () => mutate(() => (d.activeLayer = l.id));
     $('.name', row).ondblclick = () => {
@@ -1983,11 +2268,11 @@ async function renderLayers(body: HTMLElement) {
     const cfg = await ocgFor(d, sid);
     const groups: [string, any][] = [...cfg];
     if (!groups.length) continue;
-    if (srcIds.length > 1) html += `<div class="muted small" style="margin-top:6px">${esc(sources.get(sid)!.name)}</div>`;
-    for (const [id, g] of groups) html += `<div class="layer"><input type="checkbox" class="ocg" data-src="${sid}" data-ocg="${esc(id)}" ${g.visible ? 'checked' : ''}><span class="name">${esc(g.name || id)}</span></div>`;
+    if (srcIds.length > 1) html += `<div class="muted small srcname">${esc(sources.get(sid)!.name)}</div>`;
+    for (const [id, g] of groups) html += `<label class="layer"><input type="checkbox" class="ocg eye" data-src="${sid}" data-ocg="${esc(id)}" ${g.visible ? 'checked' : ''}><span class="name">${esc(g.name || id)}</span></label>`;
   }
   if (doc !== d || rightTab !== 'layers') return;
-  pl.innerHTML = html || '<p class="muted small">This PDF has no layers.</p>';
+  pl.innerHTML = html || '<p class="muted small">This PDF has no layers of its own.</p>';
   $$<HTMLInputElement>('input.ocg', pl).forEach((cb) => (cb.onchange = () => {
     const sid = cb.dataset.src!, id = cb.dataset.ocg!;
     mutate(() => {
@@ -2001,17 +2286,20 @@ async function renderLayers(body: HTMLElement) {
 }
 
 function renderScalePanel(body: HTMLElement) {
-  if (!doc || !views[currentPage]) { body.innerHTML = '<p class="muted small">No document open.</p>'; return; }
+  if (!doc || !views[currentPage]) { body.innerHTML = '<p class="muted">No document open.</p>'; return; }
   const ref = views[currentPage].ref;
   const s = scaleOf(ref);
   const units = [...IMPERIAL, ...METRIC];
-  body.innerHTML = `<h4>Page ${currentPage + 1} scale</h4>
-    <div class="measure-box" id="sc-current"><b>${esc(s.label)}</b><div class="muted small">1 inch on paper = ${fmtNum(s.factor * 72, 4)} ${UNIT_LABEL[s.unit]}</div></div>
-    <div class="btn-row"><button class="btn primary" id="sc-cal">Calibrate…</button><button class="btn" id="sc-set">Set scale…</button></div>
-    <div class="row"><label>Display unit</label><select id="sc-unit">${units.map((u) => `<option value="${u}" ${u === s.unit ? 'selected' : ''}>${UNIT_LABEL[u]}</option>`).join('')}</select></div>
-    <div class="row"><label>Precision</label><select id="sc-prec">${[0, 1, 2, 3, 4].map((p) => `<option value="${p}" ${p === s.precision ? 'selected' : ''}>${p} decimals</option>`).join('')}</select></div>
-    <div class="btn-row"><button class="btn" id="sc-all">Apply to all pages</button>${ref.scale ? '<button class="btn danger" id="sc-clear">Clear scale</button>' : ''}</div>
-    <p class="muted small">Areas show in square ${UNIT_LABEL[s.unit]} plus ${METRIC.includes(s.unit) ? 'hectares' : 'acres'}. The scale is saved inside the PDF (standard PDF measurement dictionaries), so other PDF apps can read it too.</p>`;
+  const set = !!ref.scale;
+  const same = doc.pages.filter((p) => JSON.stringify(scaleOf(p)) === JSON.stringify(s)).length;
+  body.innerHTML = `<div class="ph"><div class="ph-ic" style="--c:var(--ms)">${ICONS.scale}</div><div><div class="ph-t">Page ${currentPage + 1} scale</div><div class="ph-s">${set ? `${same} of ${doc.pages.length} pages use this scale` : 'Not calibrated yet'}</div></div></div>
+    <div class="measure scalecard ${set ? '' : 'unset'}" id="sc-current"><div class="m-main"><span class="m-v">${esc(s.label)}</span></div><div class="m-sub">1 inch on paper = <b>${fmtNum(s.factor * 72, 4)}</b> ${UNIT_LABEL[s.unit]}</div></div>
+    <div class="pf"><button class="btn primary" id="sc-cal" data-tip="Drag along a dimension you know (K)">${ICONS.calibrate}Calibrate</button><button class="btn" id="sc-set">${ICONS.scale}Set scale…</button></div>
+    <section><h4>Display</h4>
+      <div class="field"><label for="sc-unit">Unit</label><select id="sc-unit">${units.map((u) => `<option value="${u}" ${u === s.unit ? 'selected' : ''}>${UNIT_LABEL[u]}</option>`).join('')}</select></div>
+      <div class="field"><label for="sc-prec">Decimals</label><select id="sc-prec">${[0, 1, 2, 3, 4].map((p) => `<option value="${p}" ${p === s.precision ? 'selected' : ''}>${p}</option>`).join('')}</select></div></section>
+    <div class="pf"><button class="btn" id="sc-all">Use on all pages</button>${set ? '<button class="btn danger" id="sc-clear">Clear</button>' : ''}</div>
+    <p class="muted small">Areas show in square ${UNIT_LABEL[s.unit]} and ${METRIC.includes(s.unit) ? 'hectares' : 'acres'}. The scale is saved inside the PDF using the standard measurement format, so other PDF apps can read it.</p>`;
   $('#sc-cal', body).onclick = () => setTool('calibrate');
   $('#sc-set', body).onclick = () => openScaleDialog();
   $<HTMLSelectElement>('#sc-unit', body).onchange = (e) => mutate(() => (ref.scale = { ...withUnit(s, (e.target as HTMLSelectElement).value as Unit) }));
@@ -2022,12 +2310,27 @@ function renderScalePanel(body: HTMLElement) {
 
 function updateStatus() {
   const v = views[currentPage];
-  $('#st-scale').textContent = v ? `Page ${currentPage + 1}: ${scaleOf(v.ref).label}` : 'No document';
+  const chip = $('#scalechip');
+  const sc = v ? scaleOf(v.ref) : null;
+  $('#st-scale').innerHTML = !v ? 'No document' : v.ref.scale ? `${esc(sc!.label)}<small>page ${currentPage + 1}</small>` : 'No scale<small>click to calibrate</small>';
+  chip.classList.toggle('unset', !!v && !v.ref.scale);
+  chip.hidden = !v;
   ($('#btn-undo') as HTMLButtonElement).disabled = !doc || !hist().undo.length;
   ($('#btn-redo') as HTMLButtonElement).disabled = !doc || !hist().redo.length;
 }
 
 // ───────────────────────── dialogs ─────────────────────────
+function openShortcuts() {
+  const k = (s: string) => s.split(' ').map((x) => `<kbd>${esc(x)}</kbd>`).join('');
+  const rows = (list: [string, string][]) => list.map(([a, b]) => `<div class="kr"><span>${a}</span><span>${k(b)}</span></div>`).join('');
+  const tools = (Object.keys(TOOL_NAMES) as ToolId[]).map((id) => { const m = TOOL_NAMES[id].match(/^(.*?) \((.*)\)$/)!; return [m[1], m[2].split(' / ')[0]] as [string, string]; });
+  const dlg = dialog(`<div class="dlg wide"><h3>Keyboard shortcuts</h3><div class="kgrid">
+    <div><h4>Tools</h4>${rows(tools)}</div>
+    <div><h4>Editing</h4>${rows([['Undo', `${MOD}Z`], ['Redo', isMac ? '⇧⌘Z' : 'Ctrl+Y'], ['Copy / paste', `${MOD}C ${MOD}V`], ['Select all on page', `${MOD}A`], ['Delete', 'Delete'], ['Nudge (Shift = 10 px)', '← → ↑ ↓'], ['Finish polyline or area', 'Enter'], ['Remove last point', 'Backspace'], ['Constrain to 45°', 'Shift'], ['Cancel', 'Esc']])}
+      <h4>View and files</h4>${rows([['Zoom in / out', '+ −'], ['Zoom at pointer', `${MOD}wheel`], ['Pan', 'Space drag'], ['Open', `${MOD}O`], ['Save', `${MOD}S`], ['This list', '?']])}</div>
+  </div><div class="actions"><button class="btn primary" data-close>Done</button></div></div>`);
+  void dlg;
+}
 function dialog(html: string): HTMLDialogElement {
   const d = document.createElement('dialog');
   d.innerHTML = html;
@@ -2273,7 +2576,14 @@ $<HTMLInputElement>('#zoom-input').onchange = (e) => {
   if (v > 0) setZoom(v / 100);
 };
 $<HTMLInputElement>('#page-input').onchange = (e) => goToPage(+(e.target as HTMLInputElement).value - 1);
-$('#btn-snap').onclick = () => { snapOn = !snapOn; $('#btn-snap').classList.toggle('on', snapOn); };
+$('#btn-snap').onclick = () => { snapOn = !snapOn; $('#btn-snap').classList.toggle('on', snapOn); $('#btn-snap').setAttribute('aria-pressed', String(snapOn)); };
+$('#pg-prev').onclick = () => goToPage(currentPage - 1);
+$('#pg-next').onclick = () => goToPage(currentPage + 1);
+$('#scalechip').onclick = () => { rightTab = 'scale'; if (app.classList.contains('no-right')) setPanels(!app.classList.contains('no-left'), true); renderRight(); };
+$<HTMLInputElement>('#file-images').onchange = (e) => {
+  const inp = e.target as HTMLInputElement;
+  openFiles([...(inp.files ?? [])]).finally(() => (inp.value = ''));
+};
 $('#pg-rotl').onclick = () => rotatePages(-90);
 $('#pg-rotr').onclick = () => rotatePages(90);
 $('#pg-del').onclick = () => deletePages();
@@ -2341,7 +2651,9 @@ if ('launchQueue' in window) {
     viewer.scrollLeft += r.left + vx * ptPx() - (vr.left + vr.width / 2);
     viewer.scrollTop += r.top + vy * ptPx() - (vr.top + vr.height / 2);
   },
-  setSnap: (on: boolean) => { snapOn = on; $('#btn-snap').classList.toggle('on', on); },
+  setSnap: (on: boolean) => { snapOn = on; $('#btn-snap').classList.toggle('on', on); $('#btn-snap').setAttribute('aria-pressed', String(on)); },
+  setTheme: (m: ThemeMode) => { themeMode = m; applyTheme(); },
+  setPanels: (l: boolean, r: boolean) => setPanels(l, r),
   textWidth,
   selection: () => [...selection],
   close: (d: Doc) => closeDoc(d),

@@ -1,6 +1,6 @@
 // PlanMark desktop shell (Electron). Serves the bundled web app from app:// and adds native
 // File > Open, Open With / dock drop for PDFs and a native Save dialog that writes straight to disk.
-const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, protocol, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 
@@ -132,7 +132,10 @@ ipcMain.on('renderer-ready', () => {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'PlanMark', backgroundColor: '#e7ecef',
+    width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'PlanMark',
+    // match the first paint of the Studio Pro theme (dark unless the system is in light mode)
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0B0C0F' : '#ECEDF1',
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 15 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
   });
   win.webContents.setWindowOpenHandler(({ url }) => {

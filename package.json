@@ -10,7 +10,9 @@
     "build": "npm run assets && tsc --noEmit && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "fixtures": "node scripts/make-fixtures.mjs",
-    "test": "npm run build && npm run fixtures && node scripts/make-demo-plan.mjs && playwright test"
+    "test": "npm run build && npm run fixtures && node scripts/make-demo-plan.mjs && playwright test",
+    "test:perf": "npm run build && node scripts/make-big-fixtures.mjs && playwright test -c playwright.perf.config.ts",
+    "test:desktop": "cd desktop && npm run dist:linux && cd .. && playwright test -c playwright.desktop.config.ts"
   },
   "dependencies": {
     "@neslinesli93/qpdf-wasm": "^0.3.0",
