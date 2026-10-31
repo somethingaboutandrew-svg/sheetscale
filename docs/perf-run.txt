@@ -1,53 +1,87 @@
-[perf] memBaselineMB: 223.3
-[perf] open1_report_42MB_ttfp_ms: 825
-[perf] open2_more_reports_ms: 1335
-[perf] peak_open_MB: 976.4
-[perf] combine_300_pages_ms: 1159
+
+> planmark@1.1.0 test:perf
+> npm run build && node scripts/make-big-fixtures.mjs && playwright test -c playwright.perf.config.ts
+
+
+> planmark@1.1.0 build
+> npm run assets && tsc --noEmit && vite build
+
+
+> planmark@1.1.0 assets
+> node scripts/copy-assets.mjs
+
+assets copied
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 202 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                              1.24 kB │ gzip:   0.64 kB
+dist/assets/export-worker-DB-UM9ug.js      443.57 kB
+dist/assets/render-worker-B0F3Lzj4.js      537.12 kB
+dist/assets/pdf.worker.min-Dkey6ZUl.mjs  1,321.30 kB
+dist/assets/index-BW4xSU2N.css              30.85 kB │ gzip:   7.65 kB
+dist/assets/UTIF-DVN0j9XW.js                38.47 kB │ gzip:  15.18 kB
+dist/assets/index-BMMqxfoE.js            1,083.13 kB │ gzip: 377.72 kB
+
+✓ built in 790ms
+big fixtures exist
+
+Running 2 tests using 1 worker
+
+(node:560629) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[perf] memBaselineMB: 239
+[perf] open1_report_42MB_ttfp_ms: 939
+[perf] open2_more_reports_ms: 2193
+[perf] peak_open_MB: 937.6
+[perf] combine_300_pages_ms: 487
 [perf] combinedPages: 300
-[perf] peak_combine_MB: 1057.4
-[perf] scroll_all_pages_ms: 8662
-[perf] scroll_frames: {"frames":517,"p50":16.7,"p95":16.8,"p99":16.8,"max":16.8,"over50ms":0,"longTasks":0,"longestTask":0}
-[perf] memAfterFastScrollMB: 1154.2
-[perf] memBreakdownAfterScroll: {"browser":191,"network":27,"zygote":22,"renderer":866,"gpu-process":49}
-[perf] read_scroll_frames: {"frames":1665,"p50":16.7,"p95":16.7,"p99":16.8,"max":66.8,"over50ms":1,"longTasks":0,"longestTask":0}
-[perf] read_scroll_blank: {"samples":1666,"blankFramePct":4.6}
+[perf] peak_combine_MB: 959.2
+[perf] scroll_all_pages_ms: 8968
+[perf] scroll_frames: {"frames":518,"p50":16.7,"p95":16.7,"p99":16.8,"max":249.9,"over50ms":2,"longTasks":1,"longestTask":267}
+[perf] memAfterFastScrollMB: 1276
+[perf] memBreakdownAfterScroll: {"browser":190,"network":27,"zygote":22,"renderer":984,"gpu-process":55}
+[perf] read_scroll_frames: {"frames":1665,"p50":16.7,"p95":16.8,"p99":16.8,"max":116.6,"over50ms":4,"longTasks":2,"longestTask":114}
+[perf] read_scroll_blank: {"samples":1666,"blankFramePct":3.3}
 [perf] renderStatsAfterScroll: {"queued":0,"running":0,"bases":10,"tiles":0,"thumbs":6,"worker":true}
-[perf] canvasMBAfterScroll: 71
-[perf] zoom300_frames: {"frames":171,"p50":16.7,"p95":33.4,"p99":66.7,"max":83.3,"over50ms":3,"longTasks":3,"longestTask":55}
-[perf] thumbs_scroll_ms: 2481
-[perf] thumbs_frames: {"frames":296,"p50":16.7,"p95":16.7,"p99":16.8,"max":16.8,"over50ms":0,"longTasks":0,"longestTask":0}
+[perf] canvasMBAfterScroll: 68
+[perf] zoom300_frames: {"frames":170,"p50":16.7,"p95":33.3,"p99":66.7,"max":83.3,"over50ms":2,"longTasks":3,"longestTask":54}
+[perf] thumbs_scroll_ms: 2494
+[perf] thumbs_frames: {"frames":298,"p50":16.7,"p95":16.7,"p99":16.8,"max":16.8,"over50ms":0,"longTasks":0,"longestTask":0}
 [perf] thumbsRenderedLive: 6
-[perf] memAfterThumbScrollMB: 1626.8
-[perf] peak_scroll_and_thumbs_MB: 1706.3
-[perf] rotate_page_ms: 125
-[perf] delete_10_pages_ms: 95
-[perf] move_5_pages_ms: 91
-[perf] undo_ms: 109
+[perf] memAfterThumbScrollMB: 1528.2
+[perf] peak_scroll_and_thumbs_MB: 1827.5
+[perf] rotate_page_ms: 141
+[perf] delete_10_pages_ms: 61
+[perf] move_5_pages_ms: 44
+[perf] undo_ms: 84
 [perf] pagesAfterOrganise: 290
-[perf] peak_organise_MB: 1626.8
-[perf] save_editable_ms: 1791
-[perf] memAfterSaveMB: 1601.6
-[perf] memBreakdownAfterSave: {"browser":308,"network":27,"zygote":22,"renderer":1122,"gpu-process":122}
+[perf] peak_organise_MB: 1534.5
+[perf] save_editable_ms: 1623
+[perf] memAfterSaveMB: 1668.6
+[perf] memBreakdownAfterSave: {"browser":307,"network":27,"zygote":22,"renderer":1184,"gpu-process":129}
 [perf] save_editable_MB: 120.5
-[perf] peak_save_editable_MB: 1923.9
+[perf] peak_save_editable_MB: 2069
 [perf] save_editable_pages: 290
-[perf] save_flattened_ms: 2122
+[perf] save_flattened_ms: 2094
 [perf] save_flattened_MB: 120.5
-[perf] peak_save_flattened_MB: 2162.1
-[perf] reduce_300_pages_ms: 5587
-[perf] memPeakSoFarMB: 2576.5
-[perf] peak_reduce_MB: 2576.5
-[perf] reduce_result: {"beforeMB":120.464202,"afterMB":120.413785}
-[perf] reload_restore_session_ttfp_ms: 1484
+[perf] peak_save_flattened_MB: 2249.3
+[perf] reduce_300_pages_ms: 6072
+[perf] memPeakSoFarMB: 2416.6
+[perf] peak_reduce_MB: 2416.6
+[perf] reduce_result: {"beforeMB":120.464202,"afterMB":120.413782}
+[perf] reload_restore_session_ttfp_ms: 1634
 [perf] restoredDocs: [101,98,101,290]
-[perf] peak_reload_restore_MB: 1578.9
-[perf] memPeakMB: 2576.5
-  ✓  1 tests/perf/big.perf.ts:34:1 › 300 pages: open, combine, scroll, organise, save, reduce, autosave (58.4s)
-[perf] plan_ttfp_ms: 512
-[perf] plan_zoom_frames: {"frames":178,"p50":16.7,"p95":16.8,"p99":33.3,"max":33.3,"over50ms":0,"longTasks":1,"longestTask":52}
-[perf] plan_pan_frames: {"frames":137,"p50":16.7,"p95":16.8,"p99":16.8,"max":16.8,"over50ms":0,"longTasks":0,"longestTask":0}
-[perf] plan_draw_frames: {"frames":359,"p50":16.7,"p95":16.7,"p99":16.8,"max":16.8,"over50ms":0,"longTasks":0,"longestTask":0}
-[perf] plan_input_latency_ms: {"eventsOver16ms":810,"p50":32,"p95":32,"max":40}
-[perf] key_to_frame_ms: {"p50":14,"max":15.2}
-  ✓  2 tests/perf/big.perf.ts:156:1 › large plan sheet: first page, zoom, pan, draw, input latency (13.5s)
+[perf] peak_reload_restore_MB: 2072.5
+[perf] memPeakMB: 2416.6
+  ✓  1 tests/perf/big.perf.ts:36:1 › 300 pages: open, combine, scroll, organise, save, reduce, autosave (59.1s)
+[perf] plan_ttfp_ms: 502
+[perf] plan_zoom_frames: {"frames":175,"p50":16.7,"p95":16.8,"p99":50,"max":66.6,"over50ms":1,"longTasks":1,"longestTask":69}
+[perf] plan_pan_frames: {"frames":136,"p50":16.7,"p95":16.7,"p99":16.8,"max":33.3,"over50ms":0,"longTasks":0,"longestTask":0}
+[perf] plan_draw_frames: {"frames":361,"p50":16.7,"p95":16.8,"p99":33.2,"max":33.3,"over50ms":0,"longTasks":0,"longestTask":0}
+[perf] plan_input_latency_ms: {"eventsOver16ms":795,"p50":40,"p95":56,"max":80}
+[perf] key_to_frame_ms: {"p50":15,"max":15.4}
+  ✓  2 tests/perf/big.perf.ts:159:1 › large plan sheet: first page, zoom, pan, draw, input latency (13.8s)
+
   2 passed (1.2m)

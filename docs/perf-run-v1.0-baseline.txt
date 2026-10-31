@@ -1,0 +1,60 @@
+# v1.0 baseline on the same box, same day (for the v1.1 comparison)
+
+Running 2 tests using 1 worker
+
+(node:520725) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[perf] memBaselineMB: 222
+[perf] open1_report_42MB_ttfp_ms: 1187
+[perf] open2_more_reports_ms: 2711
+[perf] peak_open_MB: 990.3
+[perf] combine_300_pages_ms: 460
+[perf] combinedPages: 300
+[perf] peak_combine_MB: 942.6
+[perf] scroll_all_pages_ms: 8794
+[perf] scroll_frames: {"frames":517,"p50":16.7,"p95":16.8,"p99":16.8,"max":66.7,"over50ms":2,"longTasks":1,"longestTask":82}
+[perf] memAfterFastScrollMB: 1180.6
+[perf] memBreakdownAfterScroll: {"browser":191,"network":28,"zygote":22,"renderer":891,"gpu-process":52}
+[perf] read_scroll_frames: {"frames":1665,"p50":16.7,"p95":16.7,"p99":16.8,"max":250,"over50ms":5,"longTasks":4,"longestTask":125}
+[perf] read_scroll_blank: {"samples":1666,"blankFramePct":2.3}
+[perf] renderStatsAfterScroll: {"queued":0,"running":0,"bases":10,"tiles":0,"thumbs":6,"worker":true}
+[perf] canvasMBAfterScroll: 69
+[perf] zoom300_frames: {"frames":174,"p50":16.7,"p95":33.3,"p99":66.6,"max":116.7,"over50ms":3,"longTasks":12,"longestTask":78}
+[perf] thumbs_scroll_ms: 2492
+[perf] thumbs_frames: {"frames":147,"p50":16.7,"p95":16.8,"p99":16.8,"max":16.8,"over50ms":0,"longTasks":0,"longestTask":0}
+[perf] thumbsRenderedLive: 6
+[perf] memAfterThumbScrollMB: 1445.5
+[perf] peak_scroll_and_thumbs_MB: 1806.4
+[perf] rotate_page_ms: 137
+[perf] delete_10_pages_ms: 53
+[perf] move_5_pages_ms: 63
+[perf] undo_ms: 50
+[perf] pagesAfterOrganise: 290
+[perf] peak_organise_MB: 1467.2
+[perf] save_editable_ms: 1690
+[perf] memAfterSaveMB: 1670.5
+[perf] memBreakdownAfterSave: {"browser":307,"network":27,"zygote":22,"renderer":1193,"gpu-process":122}
+[perf] save_editable_MB: 120.5
+[perf] peak_save_editable_MB: 2005.5
+[perf] save_editable_pages: 290
+[perf] save_flattened_ms: 2344
+[perf] save_flattened_MB: 120.5
+[perf] peak_save_flattened_MB: 2192
+[perf] reduce_300_pages_ms: 5553
+[perf] memPeakSoFarMB: 2620.5
+[perf] peak_reduce_MB: 2620.5
+[perf] reduce_result: {"beforeMB":120.464201,"afterMB":120.413782}
+[perf] reload_restore_session_ttfp_ms: 1228
+[perf] restoredDocs: [101,98,101,290]
+[perf] peak_reload_restore_MB: 1419
+[perf] memPeakMB: 2620.5
+  ✓  1 tests/perf/big.perf.ts:34:1 › 300 pages: open, combine, scroll, organise, save, reduce, autosave (59.8s)
+[perf] plan_ttfp_ms: 440
+[perf] plan_zoom_frames: {"frames":179,"p50":16.7,"p95":16.8,"p99":33.3,"max":33.4,"over50ms":0,"longTasks":1,"longestTask":55}
+[perf] plan_pan_frames: {"frames":137,"p50":16.7,"p95":16.8,"p99":16.8,"max":16.8,"over50ms":0,"longTasks":0,"longestTask":0}
+[perf] plan_draw_frames: {"frames":360,"p50":16.7,"p95":16.7,"p99":16.8,"max":133.3,"over50ms":1,"longTasks":0,"longestTask":0}
+[perf] plan_input_latency_ms: {"eventsOver16ms":822,"p50":40,"p95":176,"max":176}
+[perf] key_to_frame_ms: {"p50":14.1,"max":15.4}
+  ✓  2 tests/perf/big.perf.ts:156:1 › large plan sheet: first page, zoom, pan, draw, input latency (13.6s)
+
+  2 passed (1.3m)

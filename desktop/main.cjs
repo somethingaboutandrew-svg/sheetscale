@@ -134,7 +134,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'PlanMark',
     // match the first paint of the Studio Pro theme (dark unless the system is in light mode)
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0B0C0F' : '#ECEDF1',
+    backgroundColor: '#F2F3F5', // light glass is the default theme
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 15 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
   });

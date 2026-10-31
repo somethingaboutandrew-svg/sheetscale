@@ -6,6 +6,8 @@ PlanMark is a private PDF markup and measurement tool for plan sheets. It's my o
 - Mark up sheets, with layers.
 - Combine PDFs, lossless size reduction, and images to PDF.
 
+The default look is a light "Liquid Glass" theme: a pale grey canvas with frosted side panels. A dark theme, or following your computer's setting, is under the Appearance button in the title bar. If your system is set to reduce transparency, the panels go solid.
+
 **Your files stay on your device.** Everything (opening, editing, combining, compressing) runs locally in the browser or the desktop app. Nothing is uploaded, and there is no server, account or tracking.
 
 - **Web app:** https://somethingaboutandrew-svg.github.io/planmark/. It works offline after the first visit, and you can install it from the browser menu.
@@ -18,7 +20,7 @@ PlanMark is a private PDF markup and measurement tool for plan sheets. It's my o
 
 ## Big files
 
-PlanMark is built for report sets of a few hundred pages. On the test set (three 100-page reports with photos and full-sheet maps, 125 MB in total, combined into one 300-page PDF), it opens the first report in under a second, scrolls all 300 pages at 60 fps and keeps the whole browser under about 2.6 GB of memory, even while saving and reducing the combined file. Pages and thumbnails render in a background worker, and saving runs in a worker that is thrown away afterwards, so the app stays responsive. Full numbers and method: [docs/PERF.md](docs/PERF.md).
+PlanMark is built for report sets of a few hundred pages. On the test set (three 100-page reports with photos and full-sheet maps, 125 MB in total, combined into one 300-page PDF), it opens the first report in under a second, scrolls all 300 pages at 60 fps and keeps the whole browser at about 2.4–2.9 GB of memory at peak, even while saving and reducing the combined file. Pages and thumbnails render in a background worker, and saving runs in a worker that is thrown away afterwards, so the app stays responsive. Full numbers and method: [docs/PERF.md](docs/PERF.md).
 
 ## Develop
 

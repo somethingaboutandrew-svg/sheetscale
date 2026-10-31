@@ -24,6 +24,8 @@ test.beforeAll(async () => {
   browser = await chromium.launch({ args: [marker] });
   mem = new MemSampler(browserPid(marker));
   page = await browser.newPage({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  // PERF_GLASS=0 turns the frosted panels off (same rules as reduced transparency), for an A/B of the blur cost
+  if (process.env.PERF_GLASS === '0') await page.addInitScript(() => document.documentElement.classList.add('no-glass'));
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message));
 });
 test.afterAll(async () => {
@@ -94,6 +96,7 @@ test('300 pages: open, combine, scroll, organise, save, reduce, autosave', async
     await page.waitForTimeout(400);
     log('zoom300_frames', { ...(await stopRecording(page)), events: undefined });
   }
+  if (process.env.PERF_STOP === 'zoom') { log('memPeakMB', r1(mem.stop())); return; }
 
   // scroll the thumbnail panel end to end
   await startRecording(page);

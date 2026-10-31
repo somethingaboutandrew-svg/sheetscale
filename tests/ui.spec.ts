@@ -1,29 +1,86 @@
 import { test, expect } from '@playwright/test';
 import { boot, open } from './helpers';
 
-test('theme: follows the system by default, toggle cycles auto → dark → light and persists', async ({ page }) => {
-  await page.emulateMedia({ colorScheme: 'light' });
+test('theme: light glass by default (even on a dark system); Appearance menu offers dark and match-system, and persists', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
   await boot(page);
   const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
-  expect(await theme()).toBe('light'); // auto + light system
-  await page.emulateMedia({ colorScheme: 'dark' });
-  await expect.poll(theme).toBe('dark'); // auto follows a live system change
-  await page.emulateMedia({ colorScheme: 'light' });
-  await expect.poll(theme).toBe('light');
-  await page.click('#btn-theme'); // → dark
+  expect(await theme()).toBe('light'); // default is light glass, whatever the system says
+  // frosted side panels: translucent fill + backdrop blur; nothing over the pages is blurred
+  await open(page, 'sample.pdf');
+  const css = await page.evaluate(() => {
+    const f = (sel: string) => { const s = getComputedStyle(document.querySelector(sel)!); return { bf: s.backdropFilter, bg: s.backgroundColor }; };
+    return { right: f('aside.right'), rail: f('#toolbar'), status: f('#statusbar'), viewer: f('#viewer'), tip: f('#tip') };
+  });
+  expect(css.right.bf).toContain('blur');
+  expect(css.right.bg).toMatch(/rgba\(.*0\.\d+\)/);
+  for (const k of ['rail', 'status', 'viewer', 'tip'] as const) expect(css[k].bf, k).toBe('none');
+  // while the pages scroll, the panels skip the blur (no re-blur per frame); it returns when still
+  const bfNow = () => page.evaluate(() => getComputedStyle(document.querySelector('aside.right')!).backdropFilter);
+  await page.evaluate(() => { const v = document.getElementById('viewer')!; v.dispatchEvent(new Event('scroll')); });
+  expect(await bfNow()).toBe('none');
+  await expect.poll(bfNow).toContain('blur');
+  const pick = async (mode: string) => { await page.click('#btn-theme'); await page.click(`.theme-menu [data-mode="${mode}"]`); await expect(page.locator('.theme-menu')).toHaveCount(0); };
+  const bgLight = await page.evaluate(() => getComputedStyle(document.querySelector('.titlebar')!).backgroundColor);
+  await pick('dark');
   expect(await theme()).toBe('dark');
-  await page.click('#btn-theme'); // → light
-  expect(await theme()).toBe('light');
+  const bgDark = await page.evaluate(() => getComputedStyle(document.querySelector('.titlebar')!).backgroundColor);
+  expect(bgLight).not.toBe(bgDark);
   await page.reload();
   await page.waitForSelector('body[data-ready="1"]');
+  expect(await theme()).toBe('dark');
+  expect(await page.evaluate(() => localStorage.getItem('pm.theme'))).toBe('dark');
+  await pick('auto'); // match system: follows live changes
+  expect(await theme()).toBe('dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect.poll(theme).toBe('light');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(theme).toBe('dark');
+  await page.click('#btn-theme');
+  await expect(page.locator('.theme-menu [data-mode="auto"]')).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.theme-menu')).toHaveCount(0);
+  await pick('light');
   expect(await theme()).toBe('light');
-  expect(await page.evaluate(() => localStorage.getItem('pm.theme'))).toBe('light');
-  // the canvas behind the pages actually changes colour
-  const bg = await page.evaluate(() => getComputedStyle(document.querySelector('.titlebar')!).backgroundColor);
-  await page.click('#btn-theme'); // → auto (system light)
-  await page.click('#btn-theme'); // → dark
-  const bg2 = await page.evaluate(() => getComputedStyle(document.querySelector('.titlebar')!).backgroundColor);
-  expect(bg).not.toBe(bg2);
+});
+
+test('reduced transparency: panels go solid, no blur', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await boot(page);
+  await open(page, 'sample.pdf');
+  await page.evaluate(() => (window as any).__pm.setGlass(false)); // same rules as prefers-reduced-transparency
+  const s = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('aside.right')!); return { bf: c.backdropFilter, bg: c.backgroundColor }; });
+  expect(s.bf).toBe('none');
+  expect(s.bg).toBe('rgb(250, 250, 251)');
+});
+
+test('compact palette: 8 core colours at ~17px, more colours in a popover, custom hex works', async ({ page }) => {
+  await boot(page);
+  await open(page, 'sample.pdf');
+  await page.click('[data-tool="rect"]'); // rectangle tool → style panel for new rectangles
+  const row = page.locator('.swatches[data-for="p-stroke"]');
+  await expect(row.locator('.sw[data-c]')).toHaveCount(8);
+  const box = await row.locator('.sw[data-c]').first().boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(15);
+  expect(box!.width).toBeLessThanOrEqual(18);
+  const rowBox = await row.boundingBox();
+  expect(rowBox!.height).toBeLessThanOrEqual(24); // one quiet line, no blocks
+  await row.locator('.sw.more').click();
+  const pop = page.locator('.pop.more-pop');
+  await expect(pop.locator('.sw[data-c]')).toHaveCount(16);
+  // the popover stays over the inspector panel, not over the pages
+  const pb = (await pop.boundingBox())!, rb = (await page.locator('aside.right').boundingBox())!;
+  expect(pb.x).toBeGreaterThanOrEqual(rb.x);
+  expect(pb.x + pb.width).toBeLessThanOrEqual(rb.x + rb.width + 1);
+  await pop.locator('[data-c="#1e3a8a"]').click();
+  await expect(page.locator('.swatches[data-for="p-stroke"] .sw.more.on')).toHaveCount(1);
+  expect(await page.evaluate(() => (document.querySelector('#p-stroke') as HTMLInputElement).value)).toBe('#1e3a8a');
+  await row.locator('.sw.more').click();
+  await pop.locator('.hex').fill('#12ab34');
+  await pop.locator('.hex').press('Enter');
+  expect(await page.evaluate(() => (document.querySelector('#p-stroke') as HTMLInputElement).value)).toBe('#12ab34');
+  await page.locator('.swatches[data-for="p-stroke"] .sw[data-c]').first().click();
+  await expect(page.locator('.swatches[data-for="p-stroke"] .sw[data-c]').first()).toHaveClass(/on/);
 });
 
 test('reduced motion: no transitions or animations', async ({ page }) => {

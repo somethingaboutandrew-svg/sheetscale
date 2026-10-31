@@ -1,10 +1,10 @@
-// Builds a realistic scene and saves screenshots of the Studio Pro UI to screenshots/v2/after,
-// once in the dark theme and once in the light theme (also an end-to-end check).
+// Builds a realistic scene and saves screenshots to screenshots/v3: once in the default
+// Liquid Glass light theme and once in the dark theme (also an end-to-end check).
 import { test, expect, type Page } from '@playwright/test';
 import { boot, open, clickUser, at, waitRendered, FIX } from './helpers';
 
 import { mkdirSync } from 'node:fs';
-const SHOTS = new URL('../screenshots/v2/after/', import.meta.url).pathname;
+const SHOTS = new URL('../screenshots/v3/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 const pm = (page: Page, expr: string) => page.evaluate(`(() => { const pm = window.__pm; return ${expr}; })()`);
 test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
@@ -18,10 +18,13 @@ function bez(p0: number[], p1: number[], p2: number[], p3: number[], n: number) 
   return out;
 }
 
-for (const theme of ['dark', 'light'] as const) test(`screenshots (${theme})`, async ({ page }) => {
+for (const theme of ['light', 'dark'] as const) test(`screenshots (${theme})`, async ({ page }) => {
   const shot = (name: string) => page.screenshot({ path: `${SHOTS}${name}-${theme}.png` });
   await page.emulateMedia({ colorScheme: theme });
+  // light is the default (nothing stored); dark is picked in the Appearance menu
+  if (theme === 'dark') await page.addInitScript(() => localStorage.setItem('pm.theme', 'dark'));
   await boot(page);
+  expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
   await shot('00-start-screen');
   await page.evaluate(() => localStorage.setItem('pm.author', 'Andrew Pocta'));
   await open(page, 'demo-plan.pdf');
@@ -93,6 +96,11 @@ for (const theme of ['dark', 'light'] as const) test(`screenshots (${theme})`, a
   await page.waitForTimeout(200);
   await shot('02-main-area-selected');
   await page.mouse.move(5, 500);
+  await page.locator('.swatches[data-for="p-stroke"] .sw.more').click();
+  await expect(page.locator('.pop.more-pop')).toBeVisible();
+  await page.waitForTimeout(150);
+  await shot('02b-more-colours-popover');
+  await page.keyboard.press('Escape');
 
   await page.click('[data-rt="markups"]');
   await page.waitForTimeout(200);

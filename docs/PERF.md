@@ -4,6 +4,30 @@ Measured with `npm run test:perf` (tests/perf/big.perf.ts) in headless Chromium 
 
 **Fixtures** (`scripts/make-big-fixtures.mjs`): three reports of 101, 98 and 101 pages (42 MB, 41 MB and 42 MB), mostly text, with photo pages (two 1800×1350 JPEGs each) and full-sheet map pages (4400×2850 JPEGs). There is also a 36×24 in vector plan sheet with about 2,600 contour lines.
 
+## v1.1: Liquid Glass theme (frosted panels), before and after
+
+The new default theme blurs what is behind the side panels (`backdrop-filter`). Rules that keep it cheap:
+
+- Only the two side panels and the start-screen cards are blurred. They sit over the static stage background, never over the pages. The tool rail, status capsule, tooltip, toast and popovers float over the pages, so they use an opaque frosted fill with no blur. (v1.0 blurred the rail and status capsule.)
+- While the pages scroll or zoom, the side panels keep their translucent fill but drop the blur. It returns 160 ms after the pages stop moving, so the compositor never re-blurs during a gesture.
+- Reduced transparency, or a browser without `backdrop-filter`, gets solid panels.
+
+Frame times on the same box and the same day. A *run* is one pass of the 300-page flow. This box is noisy: two runs of the same build can differ by a whole frame at p95, so these are several runs, not one.
+
+| | v1.0 Studio Pro (2 runs) | v1.1, glass off (5 runs) | v1.1, glass on (5 runs + final) |
+|---|---|---|---|
+| Fling through 300 pages, frame p95 | 16.8 / 33.4 ms | 16.7–16.8 ms | 16.7–16.8 ms |
+| Fling, frames over 50 ms (sum) | 3 | 6 | 8 (+2 final) |
+| Zoom on the 300-page doc, frame p95 | 33.3 / 50 ms | 16.8–33.3 ms | 16.8–33.3 ms |
+| Zoom, frames over 50 ms (sum) | 9 | 10 | 7 (+2 final) |
+| Thumbnail scroll, frame p95 | 16.8 ms | 16.8 ms | 16.7 ms |
+| Plan sheet zoom / pan p95 | 16.8–33.3 / 16.8–33.4 ms | 33.3 / 33.4 ms (2 runs) | 16.8 / 16.7 ms (final) |
+| Peak memory, whole flow | 2,620 / 2,648 MB | 2,726 / 2,781 MB (2 full runs) | 2,417–2,934 MB (5 full runs) |
+
+Before adding the pause, glass-on fling scrolls had worst frames of 100–133 ms vs 33–100 ms with glass off. With the pause they match. Peak memory isn't affected by the glass: the glass-off runs peaked no lower. The spread comes from when garbage collection runs during reduce.
+
+Final v1.1 run, full numbers: [perf-run.txt](perf-run.txt). The v1.0 tables below are kept for history.
+
 ## 300-page flow
 
 | Step | Before (v0.9 UI, main-thread rendering) | Now (v1.0 Studio Pro) |

@@ -242,26 +242,56 @@ let rightTab: 'props' | 'markups' | 'layers' | 'scale' = 'props';
   });
 }
 
-// ── theme: auto (follows the system), dark or light ──
+// ── small popovers (theme menu, more colours): opaque, never blurred, close on outside click or Esc ──
+let popEl: HTMLElement | null = null, popOff: (() => void) | null = null;
+function closePop() { popOff?.(); popOff = null; popEl?.remove(); popEl = null; }
+function openPop(anchor: HTMLElement, html: string, cls = '', within?: HTMLElement) {
+  closePop();
+  const el = document.createElement('div');
+  el.className = `pop ${cls}`;
+  el.innerHTML = html;
+  document.body.appendChild(el);
+  const a = anchor.getBoundingClientRect(), w = el.offsetWidth, hgt = el.offsetHeight;
+  const box = within?.getBoundingClientRect();
+  const maxR = (box ? box.right - 8 : innerWidth - 8) - w, minL = box ? box.left + 8 : 8;
+  let top = a.bottom + 6;
+  if (top + hgt > innerHeight - 8) top = Math.max(8, a.top - hgt - 6);
+  el.style.left = `${Math.max(minL, Math.min(a.left, maxR))}px`;
+  el.style.top = `${top}px`;
+  requestAnimationFrame(() => el.classList.add('in'));
+  const down = (e: PointerEvent) => { if (!el.contains(e.target as Node) && !anchor.contains(e.target as Node)) closePop(); };
+  const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); closePop(); anchor.focus(); } };
+  document.addEventListener('pointerdown', down, true);
+  document.addEventListener('keydown', key, true);
+  popOff = () => { document.removeEventListener('pointerdown', down, true); document.removeEventListener('keydown', key, true); };
+  popEl = el;
+  return el;
+}
+
+// ── theme: light "Liquid Glass" is the default; dark, or follow the system, are options ──
 type ThemeMode = 'auto' | 'dark' | 'light';
-let themeMode: ThemeMode = (localStorage.getItem('pm.theme') as ThemeMode) || 'auto';
+let themeMode: ThemeMode = (localStorage.getItem('pm.theme') as ThemeMode) || 'light';
 const mqLight = matchMedia('(prefers-color-scheme: light)');
 function applyTheme() {
   const t = themeMode === 'auto' ? (mqLight.matches ? 'light' : 'dark') : themeMode;
   document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'dark' ? '#0B0C0F' : '#ECEDF1');
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'dark' ? '#0B0C0F' : '#F2F3F5');
   const b = $('#btn-theme');
-  const label = themeMode === 'auto' ? `Theme: auto, follows your system (now ${t})` : `Theme: ${t}`;
+  const label = themeMode === 'auto' ? `Appearance: match system (now ${t})` : `Appearance: ${t === 'light' ? 'Light glass' : 'Dark'}`;
   b.innerHTML = themeMode === 'auto' ? ICONS.grid.replace('<svg', '<svg class="auto"') : t === 'dark' ? ICONS.moon : ICONS.sun;
   b.dataset.tip = label;
   b.setAttribute('aria-label', label);
+  b.setAttribute('aria-haspopup', 'menu');
 }
+function setThemeMode(m: ThemeMode) { themeMode = m; localStorage.setItem('pm.theme', m); applyTheme(); }
 mqLight.addEventListener('change', () => themeMode === 'auto' && applyTheme());
 $('#btn-theme').onclick = () => {
-  themeMode = themeMode === 'auto' ? 'dark' : themeMode === 'dark' ? 'light' : 'auto';
-  localStorage.setItem('pm.theme', themeMode);
-  applyTheme();
-  showTip($('#btn-theme'));
+  if (popEl?.classList.contains('theme-menu')) return closePop();
+  hideTip();
+  const item = (m: ThemeMode, icon: string, t: string, sub: string) => `<button role="menuitemradio" aria-checked="${themeMode === m}" data-mode="${m}">${ICONS[icon]}<span>${t}<small>${sub}</small></span><span class="ck">${ICONS.check}</span></button>`;
+  const el = openPop($('#btn-theme'), `<div class="hd">Appearance</div><div role="menu" aria-label="Appearance">${item('light', 'sun', 'Light', 'Liquid Glass, the default')}${item('dark', 'moon', 'Dark', 'Studio Pro dark')}${item('auto', 'grid', 'Match system', 'Follows your computer’s setting')}</div>`, 'menu theme-menu');
+  el.querySelectorAll<HTMLElement>('[data-mode]').forEach((x) => (x.onclick = () => { setThemeMode(x.dataset.mode as ThemeMode); closePop(); }));
+  el.querySelector<HTMLElement>('[aria-checked=true]')?.focus();
 };
 applyTheme();
 
@@ -1099,6 +1129,15 @@ function updateCurrentPage() {
 }
 
 viewer.addEventListener('scroll', () => { scheduleRender(60); updateCurrentPageSoon(); }, { passive: true });
+// While the pages move (scroll, zoom), the side panels keep their translucent fill but skip the
+// backdrop blur, so the compositor never re-blurs during a gesture. It comes back 160 ms after.
+{
+  const root = document.documentElement;
+  let still = 0;
+  const moving = () => { if (!root.classList.contains('moving')) root.classList.add('moving'); clearTimeout(still); still = window.setTimeout(() => root.classList.remove('moving'), 160); };
+  viewer.addEventListener('scroll', moving, { passive: true });
+  viewer.addEventListener('wheel', moving, { passive: true });
+}
 window.addEventListener('resize', () => scheduleRender(150));
 let cpRaf = 0;
 function updateCurrentPageSoon() { if (!cpRaf) cpRaf = requestAnimationFrame(() => { cpRaf = 0; updateCurrentPage(); }); }
@@ -2016,9 +2055,27 @@ function stylePreview(type: MarkupType, st: Style) {
   else body = `<path d="M24 50 L120 18 L216 40" fill="none" ${stroke}/>`;
   return `<svg viewBox="0 0 240 68" class="preview-svg" aria-hidden="true">${body}</svg>`;
 }
+// More colours, shown in a small popover: a light and a dark shade of each core hue, plus neutrals.
+const MORE_SWATCHES: [string, string][] = [
+  ['#fda4af', 'Light red'], ['#fdba74', 'Light orange'], ['#fde68a', 'Light yellow'], ['#86efac', 'Light green'], ['#7dd3fc', 'Light sky'], ['#93c5fd', 'Light blue'], ['#c4b5fd', 'Light violet'], ['#ffffff', 'White'],
+  ['#9f1239', 'Dark red'], ['#c2410c', 'Dark orange'], ['#a16207', 'Dark yellow'], ['#166534', 'Dark green'], ['#0369a1', 'Dark sky'], ['#1e3a8a', 'Dark blue'], ['#5b21b6', 'Dark violet'], ['#6b7280', 'Grey'],
+];
 function swatchRow(forId: string, value: string, label: string) {
-  const known = SWATCHES.some(([c]) => c.toLowerCase() === value.toLowerCase());
-  return `<div class="swatches" data-for="${forId}" role="radiogroup" aria-label="${label}">${SWATCHES.map(([c, n]) => `<button class="sw ${c.toLowerCase() === value.toLowerCase() ? 'on' : ''}" style="--c:${c}" data-c="${c}" role="radio" aria-checked="${c.toLowerCase() === value.toLowerCase()}" aria-label="${n}" data-tip="${n}"></button>`).join('')}<label class="sw custom ${known ? '' : 'on'}" style="${known ? '' : `--c:${value}`}" data-tip="Custom colour"><input type="color" id="${forId}" value="${value}" aria-label="Custom ${label.toLowerCase()}"></label></div>`;
+  const v = value.toLowerCase();
+  const known = SWATCHES.some(([c]) => c.toLowerCase() === v);
+  const sw = ([c, n]: [string, string]) => `<button class="sw ${c.toLowerCase() === v ? 'on' : ''}" style="--c:${c}" data-c="${c}" role="radio" aria-checked="${c.toLowerCase() === v}" aria-label="${n}" data-tip="${n}"></button>`;
+  return `<div class="swatches" data-for="${forId}" role="radiogroup" aria-label="${label}">${SWATCHES.map(sw).join('')}<button class="sw more ${known ? '' : 'on'}" style="${known ? '' : `--c:${value}`}" data-tip="${known ? 'More colours' : `Custom colour ${value}`}" aria-label="More ${label.toLowerCase()}s" aria-haspopup="dialog">${ICONS.plus}</button><input type="color" class="sw-native" id="${forId}" value="${value}" aria-label="Custom ${label.toLowerCase()}" tabindex="-1"></div>`;
+}
+function openMorePop(row: HTMLElement, input: HTMLInputElement, fire: (el: HTMLElement) => void) {
+  const anchor = $<HTMLElement>('.sw.more', row);
+  const v = input.value.toLowerCase();
+  const el = openPop(anchor, `<div class="hd">More colours</div><div class="grid" role="radiogroup" aria-label="More colours">${MORE_SWATCHES.map(([c, n]) => `<button class="sw ${c === v ? 'on' : ''}" style="--c:${c}" data-c="${c}" role="radio" aria-checked="${c === v}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
+    <div class="row2"><input type="text" class="hex" value="${esc(input.value)}" spellcheck="false" aria-label="Hex colour" maxlength="7"><button class="btn" data-pick>Custom…</button></div>`, 'more-pop', $('aside.right'));
+  const set = (c: string) => { input.value = c; closePop(); fire(input); };
+  el.querySelectorAll<HTMLElement>('[data-c]').forEach((b) => (b.onclick = () => set(b.dataset.c!)));
+  const hex = el.querySelector<HTMLInputElement>('.hex')!;
+  hex.onkeydown = (e) => { if (e.key === 'Enter') { const m = hex.value.trim().match(/^#?([0-9a-f]{6})$/i); if (m) set(`#${m[1].toLowerCase()}`); else hex.select(); } };
+  el.querySelector<HTMLElement>('[data-pick]')!.onclick = () => { closePop(); try { (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.() ?? input.click(); } catch { input.click(); } };
 }
 const pctSlider = (id: string, v: number, c: string) => `<div class="slider"><input type="range" id="${id}" min="0" max="100" value="${Math.round(v * 100)}" style="--v:${Math.round(v * 100)}%;--c:${c}"><output>${Math.round(v * 100)}%</output></div>`;
 
@@ -2089,6 +2146,7 @@ function renderProps(body: HTMLElement) {
   $$('.swatches', body).forEach((row) => {
     const input = $<HTMLInputElement>(`#${row.dataset.for}`, row);
     $$('.sw[data-c]', row).forEach((b) => (b.onclick = () => { input.value = b.dataset.c!; fire(input); }));
+    $<HTMLElement>('.sw.more', row).onclick = () => (popEl?.classList.contains('more-pop') ? closePop() : openMorePop(row, input, fire));
   });
   $$('.seg.widths button', body).forEach((b) => (b.onclick = () => { const i = $<HTMLInputElement>('#p-width', body); i.value = b.dataset.w!; fire(i); }));
   $$('.seg.dashes button', body).forEach((b) => (b.onclick = () => { const i = $<HTMLSelectElement>('#p-dash', body); i.value = b.dataset.dash!; fire(i); }));
@@ -2653,6 +2711,7 @@ if ('launchQueue' in window) {
   },
   setSnap: (on: boolean) => { snapOn = on; $('#btn-snap').classList.toggle('on', on); $('#btn-snap').setAttribute('aria-pressed', String(on)); },
   setTheme: (m: ThemeMode) => { themeMode = m; applyTheme(); },
+  setGlass: (on: boolean) => document.documentElement.classList.toggle('no-glass', !on),
   setPanels: (l: boolean, r: boolean) => setPanels(l, r),
   textWidth,
   selection: () => [...selection],
