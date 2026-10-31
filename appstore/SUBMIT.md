@@ -116,11 +116,11 @@ From `sheetscale/desktop`:
 This builds a **universal** (Apple Silicon + Intel) app with Electron's Mac App Store build. It is signed with **Apple Distribution**, wrapped in a `.pkg` signed with **Mac Installer Distribution**, and the `embedded.provisionprofile` from step 5 goes inside it. electron-builder adds the required `com.apple.security.application-groups` entitlement (`<TeamID>.com.andrewpocta.sheetscale`) and `ElectronTeamID` automatically from your certificate. The result is:
 
     desktop/release/mas-universal/SheetScale.app
-    desktop/release/SheetScale-1.1.0-mas.pkg
+    desktop/release/SheetScale-1.2.0-mas.pkg
 
 Optional checks:
 
-    pkgutil --check-signature release/SheetScale-1.1.0-mas.pkg      # signed by 3rd Party Mac Developer Installer / Mac Installer Distribution
+    pkgutil --check-signature release/SheetScale-1.2.0-mas.pkg      # signed by 3rd Party Mac Developer Installer / Mac Installer Distribution
     codesign -d --entitlements - release/mas-universal/SheetScale.app   # app-sandbox, user-selected.read-write, application-groups
 
 Every upload needs a new build number. For the next upload of the same version, use:
@@ -132,7 +132,7 @@ Every upload needs a new build number. For the next upload of the same version, 
 App Store Connect → **Apps → + → New App**:
 
 - Platforms: **macOS**
-- Name: from `appstore/METADATA.md` (or your new name)
+- Name: **SheetScale: All-in-One PDF App** (exactly 30 characters, Apple's limit). The app itself, its menus and Finder still say **SheetScale**.
 - Primary language: English (U.S.)
 - Bundle ID: `com.andrewpocta.sheetscale`
 - SKU: `SHEETSCALE-MAC-001`
@@ -141,16 +141,16 @@ App Store Connect → **Apps → + → New App**:
 ## 9. Upload with Transporter **[You] [Mac]**
 
 1. Install **Transporter** from the Mac App Store: https://apps.apple.com/us/app/transporter/id1450874784
-2. Sign in with your Apple ID, drag in `SheetScale-1.1.0-mas.pkg`, and click **Deliver**.
+2. Sign in with your Apple ID, drag in `SheetScale-1.2.0-mas.pkg`, and click **Deliver**.
 3. Processing takes about 15–60 minutes. You get an email when the build is ready, or a list of problems if Apple's automated check rejects it. If you get the rejection email, forward it to Grok Bot.
 
 ## 10. Fill in the listing **[You]**
 
 Copy everything from `appstore/METADATA.md`:
 
-1. **App Information**: subtitle, categories (Productivity, then Business), content rights, age rating questionnaire (all None / No → 4+).
+1. **App Information**: subtitle **Plan Markup & Measure to Scale**, categories (Productivity, then Business), content rights, age rating questionnaire (all None / No → 4+).
 2. **App Privacy**: Privacy Policy URL → *Get Started* → "No, we do not collect data from this app" → Publish. The label reads **Data Not Collected**.
-3. **macOS App → 1.1.0 Prepare for Submission**: screenshots (drag in `appstore/screenshots/` in order), promotional text, description, keywords, support URL, marketing URL, version, copyright.
+3. **macOS App → 1.2.0 Prepare for Submission**: screenshots (drag in `appstore/screenshots/` in order), promotional text, description, keywords, support URL, marketing URL, version, copyright.
 4. **Build**: choose the build you uploaded. Export compliance is already answered by `ITSAppUsesNonExemptEncryption = false` in the app.
 5. **App Review Information**: your name, phone and email; Sign-in required: **No**; paste the review notes; attach `appstore/review/SheetScale-review-sample.pdf`.
 6. **Version Release**: choose **Manually release this version** so you control launch day.
