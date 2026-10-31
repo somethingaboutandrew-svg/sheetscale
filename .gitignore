@@ -9,3 +9,8 @@ desktop/node_modules/
 desktop/release/
 desktop/app/
 tests/fixtures/big/
+
+# Apple signing files stay on Andrew's Mac
+desktop/build/*.provisionprofile
+*.p12
+*.cer

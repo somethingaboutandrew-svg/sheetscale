@@ -9,8 +9,11 @@
   "scripts": {
     "stage": "rm -rf app && cp -r ../dist app",
     "start": "npm run stage && electron .",
-    "dist:mac": "npm run stage && electron-builder --mac zip --arm64 --x64 --publish never",
-    "dist:linux": "npm run stage && electron-builder --linux dir --publish never"
+    "dist:mac": "npm run stage && electron-builder --mac zip --arm64 --x64 --publish never -c.mac.identity=null",
+    "dist:linux": "npm run stage && electron-builder --linux dir --publish never",
+    "dist:mas": "npm run stage && electron-builder --mac mas --universal --publish never",
+    "dist:mas-dev": "npm run stage && electron-builder --mac mas-dev --arm64 --publish never",
+    "dist:mas-unsigned": "npm run stage && electron-builder --mac mas --universal --publish never -c.mas.identity=null -c.mas.provisioningProfile=null"
   },
   "build": {
     "appId": "com.andrewpocta.planmark",
@@ -30,10 +33,14 @@
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.png",
-      "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "artifactName": "PlanMark-${version}-mac-${arch}.${ext}"
+      "artifactName": "PlanMark-${version}-mac-${arch}.${ext}",
+      "minimumSystemVersion": "12.0",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "fileAssociations": [
       {
@@ -47,6 +54,33 @@
     "linux": {
       "target": "dir",
       "icon": "build/icon.png"
+    },
+    "mas": {
+      "target": [
+        {
+          "target": "mas",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "type": "distribution",
+      "hardenedRuntime": false,
+      "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+      "provisioningProfile": "build/embedded.provisionprofile",
+      "preAutoEntitlements": true,
+      "minimumSystemVersion": "12.0",
+      "category": "public.app-category.productivity",
+      "artifactName": "PlanMark-${version}-mas.${ext}"
+    },
+    "masDev": {
+      "type": "development",
+      "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+      "preAutoEntitlements": true,
+      "artifactName": "PlanMark-${version}-mas-dev.${ext}",
+      "provisioningProfile": "build/development.provisionprofile"
     }
   },
   "devDependencies": {

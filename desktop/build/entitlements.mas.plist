@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PlanMark - Mac App Store entitlements for the main app bundle.
+  Only what PlanMark uses:
+    * app-sandbox: required for the Mac App Store.
+    * files.user-selected.read-write: open PDFs/images the user picks (Open dialog, drag and drop,
+      Finder "Open With", dock drop) and write the files they choose in the Save dialog.
+  Deliberately NOT included: network.client/server (PlanMark makes no network connections),
+  camera, microphone, USB, printing, location, contacts, downloads/pictures folder access.
+  The com.apple.security.application-groups entry (TEAMID.com.andrewpocta.planmark) that Electron
+  needs is added automatically at signing time by @electron/osx-sign (preAutoEntitlements),
+  from the Team ID in the "Apple Distribution" certificate.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+  </dict>
+</plist>

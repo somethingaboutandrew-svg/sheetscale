@@ -17,7 +17,13 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]);
 
+// Mac App Store build (Electron's "mas" flavour, App Sandbox). No auto-update exists in any build;
+// the MAS build also hides developer tools.
+const IS_MAS = process.mas === true;
+const SITE = 'https://somethingaboutandrew-svg.github.io/planmark/';
+
 let win = null;
+let infoWin = null;
 let rendererReady = false;
 const pendingPaths = [];
 let lastDir = null;
@@ -105,12 +111,42 @@ function buildMenu() {
         { label: 'Fit Page', accelerator: 'CmdOrCtrl+0', click: cmd('fit-page') },
         { type: 'separator' },
         { role: 'togglefullscreen' },
-        { role: 'toggleDevTools', accelerator: isMac ? 'Alt+Cmd+I' : 'Ctrl+Shift+I' },
+        ...(IS_MAS ? [] : [{ role: 'toggleDevTools', accelerator: isMac ? 'Alt+Cmd+I' : 'Ctrl+Shift+I' }]),
       ],
     },
     { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'PlanMark Support', click: () => shell.openExternal(SITE + 'support.html') },
+        { label: 'Privacy Policy', click: () => shell.openExternal(SITE + 'privacy.html') },
+        { type: 'separator' },
+        { label: 'Acknowledgements', click: () => showInfo('app://planmark/licenses.html', 'Acknowledgements') },
+        { label: 'Chromium Licenses', click: () => showInfo(chromiumLicenses(), 'Chromium Licenses') },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// Electron puts LICENSES.chromium.html in Contents/Resources on macOS and next to the executable elsewhere.
+function chromiumLicenses() {
+  const inRes = path.join(process.resourcesPath, 'LICENSES.chromium.html');
+  return require('node:fs').existsSync(inRes) ? inRes : path.join(path.dirname(process.execPath), 'LICENSES.chromium.html');
+}
+
+// Read-only window for the bundled license pages (no preload, no Node, sandboxed).
+function showInfo(target, title) {
+  if (infoWin) { infoWin.close(); infoWin = null; }
+  infoWin = new BrowserWindow({
+    width: 900, height: 760, title, parent: win || undefined, backgroundColor: '#F2F3F5',
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
+  });
+  infoWin.setMenuBarVisibility(false);
+  infoWin.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  infoWin.webContents.on('will-navigate', (e, url) => { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); });
+  infoWin.on('closed', () => { infoWin = null; });
+  if (target.startsWith('app://')) infoWin.loadURL(target); else infoWin.loadFile(target);
 }
 
 ipcMain.handle('save-file', async (_e, name, bytes) => {
@@ -140,6 +176,7 @@ function createWindow() {
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url);
+    else if (url === 'app://planmark/licenses.html') showInfo(url, 'Acknowledgements');
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('app://')) e.preventDefault(); });

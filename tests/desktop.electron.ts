@@ -85,3 +85,41 @@ test('desktop shell: PDF passed at launch (before renderer is ready) is queued a
   await expect.poll(() => page.evaluate(() => (window as any).__pm?.docs?.length ?? 0), { timeout: 20000 }).toBe(1);
   await app.close();
 });
+
+test('desktop shell: Help menu and start-screen links open the bundled Acknowledgements and the Chromium licenses', async () => {
+  const app = await electron.launch({
+    executablePath: new URL('../desktop/release/linux-unpacked/planmark-desktop', import.meta.url).pathname,
+    args: ['--no-sandbox', `--user-data-dir=${OUT}profile3`],
+  });
+  const page = await app.firstWindow();
+  await page.waitForSelector('body[data-ready="1"]');
+  const opened: string[] = [];
+  await app.evaluate(({ shell }) => { (shell as any).openExternal = async (u: string) => { (globalThis as any).__ext = [...((globalThis as any).__ext || []), u]; }; });
+  const help = () => app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.find((i) => i.role === 'help' || i.label === 'Help')!.submenu!.items.map((i) => i.label));
+  expect(await help()).toEqual(['PlanMark Support', 'Privacy Policy', '', 'Acknowledgements', 'Chromium Licenses']);
+
+  // start-screen footer link -> child window with the bundled licenses page
+  const [ack] = await Promise.all([app.waitForEvent('window'), page.click('.kb .links a:has-text("Acknowledgements")')]);
+  await ack.waitForLoadState();
+  expect(ack.url()).toBe('app://planmark/licenses.html');
+  await expect(ack.locator('h1')).toHaveText('Acknowledgements');
+  for (const n of ['PDF.js', 'pdf-lib', 'qpdf', 'Liberation Sans', 'Electron', 'Chromium']) await expect(ack.locator('table')).toContainText(n);
+  await expect(ack.locator('table')).not.toContainText('GPL');
+
+  // Help > Chromium Licenses -> the LICENSES.chromium.html that ships with Electron
+  const [chr] = await Promise.all([app.waitForEvent('window'), app.evaluate(({ Menu }) => {
+    Menu.getApplicationMenu()!.items.find((i) => i.role === 'help' || i.label === 'Help')!.submenu!.items.find((i) => i.label === 'Chromium Licenses')!.click();
+  })]);
+  await chr.waitForLoadState();
+  expect(chr.url()).toMatch(/LICENSES\.chromium\.html$/);
+
+  // privacy / support open the website in the browser, not inside the app
+  await app.evaluate(({ Menu }) => {
+    const items = Menu.getApplicationMenu()!.items.find((i) => i.role === 'help' || i.label === 'Help')!.submenu!.items;
+    items.find((i) => i.label === 'Privacy Policy')!.click();
+    items.find((i) => i.label === 'PlanMark Support')!.click();
+  });
+  opened.push(...(await app.evaluate(() => (globalThis as any).__ext)));
+  expect(opened).toEqual(['https://somethingaboutandrew-svg.github.io/planmark/privacy.html', 'https://somethingaboutandrew-svg.github.io/planmark/support.html']);
+  await app.close();
+});

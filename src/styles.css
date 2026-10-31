@@ -357,6 +357,9 @@ input.eye:checked { background: var(--tx); -webkit-mask-image: var(--eye-on); ma
 .local svg { width: 14px; height: 14px; color: var(--ms); }
 .kb { display: flex; gap: 16px; }
 .kb span { display: inline-flex; gap: 6px; align-items: center; }
+.kb .links { gap: 12px; }
+.kb .links a { color: var(--tx3); text-decoration: none; }
+.kb .links a:hover { color: var(--tx2); text-decoration: underline; }
 @media (max-width: 900px) { .start { grid-template-columns: 1fr; padding: 32px 28px 80px; } .foot { left: 28px; right: 28px; } }
 
 /* ── dialogs, toasts, busy ── */

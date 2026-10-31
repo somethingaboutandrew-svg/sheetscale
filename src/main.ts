@@ -806,6 +806,14 @@ const ago = (t: number) => {
   const days = Math.round(hrs / 24);
   return days < 7 ? `${days} d ago` : new Date(t).toLocaleDateString();
 };
+// Privacy, support and open-source acknowledgements. The web build links its own pages; the desktop
+// app opens privacy/support on the website in the browser and shows the bundled licenses in a window.
+const SITE = 'https://somethingaboutandrew-svg.github.io/planmark/';
+const INFO_LINKS = [
+  ['Privacy', native ? SITE + 'privacy.html' : 'privacy.html'],
+  ['Support', native ? SITE + 'support.html' : 'support.html'],
+  ['Acknowledgements', 'licenses.html'],
+].map(([t, u]) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`).join('');
 function startScreen() {
   const el = h(`<div class="start" id="start">
     <div class="hero">${LOGO(52)}
@@ -823,7 +831,7 @@ function startScreen() {
       </div>
     </div>
     <div class="recent"><h3>Recent <button class="link" id="recent-clear" hidden>Clear</button></h3><div id="recent-list"><p class="muted">Files you open show up here, so you can pick up where you left off.</p></div></div>
-    <div class="foot"><span class="local">${ICONS.shield}Everything runs on this device. No account, no upload.</span><span class="kb"><span><kbd>?</kbd> Shortcuts</span></span></div>
+    <div class="foot"><span class="local">${ICONS.shield}Everything runs on this device. No account, no upload.</span><span class="kb"><span><kbd>?</kbd> Shortcuts</span><span class="links">${INFO_LINKS}</span></span></div>
   </div>`);
   $('#empty-open', el).onclick = () => $<HTMLInputElement>('#file-open').click();
   $('#start-combine', el).onclick = () => openCombineDialog();
