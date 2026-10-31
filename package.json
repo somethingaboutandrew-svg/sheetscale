@@ -1,0 +1,27 @@
+{
+  "name": "planmark",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PlanMark - private, local-only PDF markup and measurement app",
+  "scripts": {
+    "assets": "node scripts/copy-assets.mjs",
+    "dev": "npm run assets && vite",
+    "build": "npm run assets && tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "fixtures": "node scripts/make-fixtures.mjs",
+    "test": "npm run build && npm run fixtures && node scripts/make-demo-plan.mjs && playwright test"
+  },
+  "dependencies": {
+    "@neslinesli93/qpdf-wasm": "^0.3.0",
+    "@pdf-lib/standard-fonts": "^1.0.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.4.299",
+    "utif": "^3.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}

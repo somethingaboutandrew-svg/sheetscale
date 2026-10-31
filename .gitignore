@@ -1,0 +1,7 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+public/pdfjs/
+public/qpdf/qpdf.js
+public/qpdf/qpdf.wasm
