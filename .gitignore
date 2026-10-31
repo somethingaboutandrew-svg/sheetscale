@@ -8,3 +8,4 @@ public/qpdf/qpdf.wasm
 desktop/node_modules/
 desktop/release/
 desktop/app/
+tests/fixtures/big/

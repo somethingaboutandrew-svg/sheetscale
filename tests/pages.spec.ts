@@ -106,7 +106,12 @@ test('PDF layers (OCG): list, toggle visibility on canvas, carried to export', a
     const el = document.querySelector('.page') as HTMLElement;
     const c = el.querySelector('canvas.base') as HTMLCanvasElement;
     const k = c.width / 612;
-    const d = c.getContext('2d')!.getImageData(Math.round(x * k), Math.round((792 - y) * k), 1, 1).data;
+    // the page bitmap may live in a 'bitmaprenderer' canvas: sample it through a 2D copy
+    const t = document.createElement('canvas');
+    t.width = 1; t.height = 1;
+    const g = t.getContext('2d')!;
+    g.drawImage(c, Math.round(x * k), Math.round((792 - y) * k), 1, 1, 0, 0, 1, 1);
+    const d = g.getImageData(0, 0, 1, 1).data;
     return [d[0], d[1], d[2]];
   }, [x, y]);
   await waitRendered(page);

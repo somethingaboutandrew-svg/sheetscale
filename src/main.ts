@@ -6,7 +6,8 @@ import type { Doc, Layer, Markup, MarkupType, PageRef, Pt, ScaleCal, SourceFile,
 import { markupPrims, snapPoints, rectPts, bounds, primsBounds, type Prim } from './geom';
 import { AREA_LABEL, IMPERIAL, METRIC, PAPER_SCALE, SCALE_PRESETS, UNIT_LABEL, convertLen, dist, fmtNum, isMeasure, measureOf, scaleFromCalibration, scaleFromRatio, withUnit } from './measure';
 import { exportPdf, imagesToPdf, loadSource, TYPE_LABEL } from './pdfio';
-import { reduceLossless } from './qpdf';
+import { reduceLosslessConsume } from './qpdf';
+import { initRenderer, openInRenderer, closeInRenderer, renderPage, workerRenderingAvailable, renderQueueStats } from './render';
 import * as store from './store';
 import { ICONS } from './icons';
 import { textWidth } from './font';
@@ -19,6 +20,9 @@ const PDFJS_OPTS = {
   standardFontDataUrl: new URL('pdfjs/standard_fonts/', BASE).href,
   wasmUrl: new URL('pdfjs/wasm/', BASE).href,
   isEvalSupported: false,
+  // pdf.js's WebCodecs JPEG path keeps decoded frames in native memory that is not released
+  // promptly: on a 300-page report set it pushed the tab past 3.5 GB. The JS decoder is as smooth.
+  isImageDecoderSupported: false,
 };
 
 // ───────────────────────── helpers ─────────────────────────
@@ -60,9 +64,9 @@ async function nativeSave(bytes: Uint8Array, name: string) {
   if (path) toast(`Saved ${fmtBytes(bytes.length)} to ${path}`, 4000);
   return path;
 }
-function download(bytes: Uint8Array, name: string) {
-  if (native) { void nativeSave(bytes, name); return; }
-  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: name.endsWith('.csv') ? 'text/csv' : 'application/pdf' }));
+function download(bytes: Uint8Array | Blob, name: string) {
+  if (native) { void (bytes instanceof Blob ? bytes.arrayBuffer().then((b) => nativeSave(new Uint8Array(b), name)) : nativeSave(bytes, name)); return; }
+  const url = URL.createObjectURL(bytes instanceof Blob ? bytes : new Blob([bytes as BlobPart], { type: name.endsWith('.csv') ? 'text/csv' : 'application/pdf' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
@@ -330,6 +334,8 @@ async function closeDoc(d: Doc) {
   for (const sid of new Set(d.pages.map((p) => p.src))) {
     if (!used.has(sid)) {
       (sources.get(sid)?.pdf as any)?.loadingTask?.destroy?.();
+      closeInRenderer(sid);
+      for (const k of [...proxyCache.keys()]) if (k.startsWith(sid + '|')) proxyCache.delete(k);
       sources.delete(sid);
       await store.delSource(sid);
     }
@@ -432,24 +438,37 @@ function redo() {
 }
 
 // ───────────────────────── viewer ─────────────────────────
+// Rendering model (kept cheap at 300+ pages):
+//  * every page has a placeholder <div>; only pages near the viewport hold a rendered bitmap (LRU-capped),
+//  * rasterising happens in a worker (src/render-worker.ts) and comes back as an ImageBitmap,
+//  * above the base resolution cap, 1024px tiles are rendered for the visible area and cached while panning,
+//  * pages far away are released (bitmaps dropped, pdf.js page caches cleaned).
+type Job = { cancel: () => void };
+interface Tile { el: HTMLCanvasElement; job?: Job; task?: RenderTask }
 interface PV {
   ref: PageRef;
   el: HTMLDivElement;
   base: HTMLCanvasElement;
-  detail: HTMLCanvasElement;
+  tiles: HTMLDivElement;
   hl: SVGSVGElement;
   svg: SVGSVGElement;
   proxy: PDFPageProxy;
   vp1: PageViewport;
   rot: number;
   baseScale: number;
+  baseHash?: string;
+  baseJob?: Job;
   baseTask?: RenderTask;
-  detailTask?: RenderTask;
-  detailKey?: string;
-  ocgHash?: string;
+  tileKey?: string;
+  tileMap: Map<string, Tile>;
+  lastUsed: number;
 }
 let views: PV[] = [];
 const SVGNS = 'http://www.w3.org/2000/svg';
+const useWorker = workerRenderingAvailable() && !/[?&]mainrender\b/.test(location.search);
+initRenderer(PDFJS_OPTS);
+const MAX_BASES = 10; // rendered page bitmaps kept at once
+const TILE = 1024; // device px
 
 function pageRot(proxy: PDFPageProxy, ref: PageRef) {
   return (((proxy.rotate + ref.rot) % 360) + 360) % 360;
@@ -466,27 +485,71 @@ async function ocgFor(d: Doc, srcId: string) {
   for (const id of d.ocgShown[srcId] ?? []) c.setVisibility(id, true);
   return c;
 }
+const ocgState = (d: Doc, srcId: string) => {
+  const hidden = d.ocgHidden[srcId] ?? [], shown = d.ocgShown[srcId] ?? [];
+  return { hidden, shown, hash: `${hidden.join(',')}|${shown.join(',')}` };
+};
+function ensureInRenderer(srcId: string) {
+  const s = sources.get(srcId);
+  if (s) openInRenderer(srcId, s.bytes);
+}
+/** Paint an ImageBitmap into a fresh canvas without copying (bitmaprenderer). */
+function bitmapCanvas(bm: ImageBitmap, cls: string) {
+  const c = document.createElement('canvas');
+  c.width = bm.width;
+  c.height = bm.height;
+  c.className = cls;
+  const ctx = c.getContext('bitmaprenderer');
+  if (ctx) { ctx.transferFromImageBitmap(bm); (c as any).__brc = ctx; }
+  else { c.getContext('2d')!.drawImage(bm, 0, 0); bm.close(); }
+  return c;
+}
+
+/** Drop a canvas's backing store. A 'bitmaprenderer' canvas keeps its ImageBitmap until it is
+ *  explicitly replaced with null; resizing alone does not release it. */
+function freeCanvas(c: HTMLCanvasElement | null | undefined) {
+  if (!c) return;
+  const ctx = (c as any).__brc as ImageBitmapRenderingContext | undefined;
+  if (ctx) { try { ctx.transferFromImageBitmap(null); } catch {} }
+  c.width = c.height = 0;
+}
+
+const proxyCache = new Map<string, Promise<PDFPageProxy>>();
+const getProxy = (ref: PageRef) => {
+  const k = `${ref.src}|${ref.index}`;
+  let p = proxyCache.get(k);
+  if (!p) proxyCache.set(k, (p = sources.get(ref.src)!.pdf.getPage(ref.index + 1)));
+  return p;
+};
 
 async function buildViewer(keepScroll = false) {
   const st = { l: viewer.scrollLeft, t: viewer.scrollTop };
-  for (const v of views) { v.baseTask?.cancel(); v.detailTask?.cancel(); }
-  views = [];
-  pagesEl.innerHTML = '';
   $('.empty', viewer)?.remove();
   if (!doc) {
-    viewer.appendChild(h(`<div class="empty"><div class="card"><img src="icons/icon.svg" width="56" alt=""><h2>PlanMark</h2>
-      <p>Open or drop PDFs (or PNG / JPG / TIFF images) to mark up, measure, combine, flatten and shrink them.<br><b>Everything runs locally</b>; your files are never uploaded.</p>
-      <button class="btn primary" id="empty-open">Open files…</button></div></div>`));
-    $('#empty-open').onclick = () => $<HTMLInputElement>('#file-open').click();
+    for (const v of views) releaseView(v);
+    views = [];
+    pagesEl.innerHTML = '';
+    viewer.appendChild(startScreen());
     $('#page-count').textContent = '0';
     return;
   }
   const d = doc;
-  const proxies = await Promise.all(d.pages.map((p) => sources.get(p.src)!.pdf.getPage(p.index + 1)));
+  const proxies = await Promise.all(d.pages.map(getProxy));
   if (doc !== d) return;
+  // Reuse page views whose page and rotation are unchanged, so reorders don't re-render anything.
+  const old = new Map(views.map((v) => [v.ref.uid, v]));
+  const next: PV[] = [];
   d.pages.forEach((ref, i) => {
     const proxy = proxies[i];
     const rot = pageRot(proxy, ref);
+    const prev = old.get(ref.uid);
+    if (prev && prev.rot === rot && prev.proxy === proxy) {
+      old.delete(ref.uid);
+      prev.ref = ref;
+      ($('.pnum', prev.el) as HTMLElement).textContent = String(i + 1);
+      next.push(prev);
+      return;
+    }
     const vp1 = proxy.getViewport({ scale: 1, rotation: rot });
     const el = document.createElement('div');
     el.className = 'page';
@@ -494,9 +557,8 @@ async function buildViewer(keepScroll = false) {
     el.innerHTML = `<span class="pnum">${i + 1}</span>`;
     const base = document.createElement('canvas');
     base.className = 'base';
-    const detail = document.createElement('canvas');
-    detail.className = 'detail';
-    detail.style.display = 'none';
+    const tiles = document.createElement('div');
+    tiles.className = 'tiles';
     const mk = (cls: string) => {
       const s = document.createElementNS(SVGNS, 'svg') as SVGSVGElement;
       s.setAttribute('class', cls);
@@ -510,15 +572,23 @@ async function buildViewer(keepScroll = false) {
     hl.style.pointerEvents = 'none';
     hl.style.mixBlendMode = 'multiply';
     const svg = mk('ov');
-    el.append(base, detail, hl, svg);
-    pagesEl.appendChild(el);
-    views.push({ ref, el, base, detail, hl, svg, proxy, vp1, rot, baseScale: 0 });
+    el.append(base, tiles, hl, svg);
+    next.push({ ref, el, base, tiles, hl, svg, proxy, vp1, rot, baseScale: 0, tileMap: new Map(), lastUsed: 0 });
   });
+  for (const v of old.values()) releaseView(v);
+  views = next;
+  pagesEl.replaceChildren(...views.map((v) => v.el));
   $('#page-count').textContent = String(d.pages.length);
   layout();
   redrawMarkups();
   if (keepScroll) { viewer.scrollLeft = st.l; viewer.scrollTop = st.t; }
   scheduleRender(0);
+}
+
+function startScreen() {
+  const el = h(`<div class="empty"><div class="card"><h2>PlanMark</h2><button class="btn primary" id="empty-open">Open files…</button></div></div>`);
+  $('#empty-open', el).onclick = () => $<HTMLInputElement>('#file-open').click();
+  return el;
 }
 
 function layout() {
@@ -531,99 +601,212 @@ function layout() {
   redrawSelection();
 }
 
+// Throttled (not debounced) so pages keep appearing while you scroll.
 let renderTimer: number | undefined;
-function scheduleRender(ms = 120) {
+let renderDue = 0;
+function scheduleRender(ms = 60) {
+  const due = performance.now() + ms;
+  if (renderTimer !== undefined && due >= renderDue) return;
   clearTimeout(renderTimer);
-  renderTimer = window.setTimeout(renderVisible, ms);
+  renderDue = due;
+  renderTimer = window.setTimeout(() => { renderTimer = undefined; renderVisible(); }, ms);
+}
+let zoomTimer: number | undefined;
+function scheduleRenderAfterZoom() {
+  clearTimeout(zoomTimer);
+  zoomTimer = window.setTimeout(() => scheduleRender(0), 140);
 }
 
+/** Views intersecting the viewport (+ margin in viewport heights), via binary search on layout order. */
 function visibleViews(margin = 0.5) {
+  if (!views.length) return [];
   const vr = viewer.getBoundingClientRect();
   const mh = vr.height * margin;
-  return views.filter((v) => {
-    const r = v.el.getBoundingClientRect();
-    return r.bottom > vr.top - mh && r.top < vr.bottom + mh && r.right > vr.left && r.left < vr.right;
-  });
+  const top = vr.top - mh, bottom = vr.bottom + mh;
+  let lo = 0, hi = views.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (views[mid].el.getBoundingClientRect().bottom < top) lo = mid + 1;
+    else hi = mid;
+  }
+  const out: PV[] = [];
+  for (let i = lo; i < views.length; i++) {
+    const r = views[i].el.getBoundingClientRect();
+    if (r.top > bottom) break;
+    if (r.bottom > top && r.right > vr.left && r.left < vr.right) out.push(views[i]);
+  }
+  return out;
 }
 
-async function renderVisible() {
-  const vis = visibleViews();
-  for (const v of vis) {
-    renderBase(v);
-    renderDetail(v);
+function renderVisible() {
+  if (!doc) return;
+  const now = performance.now();
+  const inView = visibleViews(0);
+  const near = visibleViews(1);
+  const keep = new Set(near);
+  for (const v of near) v.lastUsed = now + (inView.includes(v) ? 1 : 0);
+  for (const v of near) renderBase(v, inView.includes(v) ? 0 : 3);
+  for (const v of inView) renderTiles(v);
+  // drop work and bitmaps for pages that scrolled away
+  for (const v of views) {
+    if (keep.has(v)) continue;
+    if (v.baseJob) { v.baseJob.cancel(); v.baseJob = undefined; }
+    v.baseTask?.cancel();
+    if (v.tileMap.size) clearTiles(v);
   }
+  const rendered = views.filter((v) => v.baseScale > 0 && !keep.has(v)).sort((a, b) => a.lastUsed - b.lastUsed);
+  let live = views.filter((v) => v.baseScale > 0).length;
+  for (const v of rendered) { if (live <= MAX_BASES) break; releaseView(v); live--; }
   updateCurrentPage();
 }
 
+function releaseView(v: PV) {
+  v.baseJob?.cancel();
+  v.baseJob = undefined;
+  v.baseTask?.cancel();
+  clearTiles(v);
+  if (v.baseScale) {
+    freeCanvas(v.base);
+    v.baseScale = 0;
+    if (!useWorker) v.proxy.cleanup();
+  }
+}
+function clearTiles(v: PV) {
+  for (const t of v.tileMap.values()) { t.job?.cancel(); t.task?.cancel(); freeCanvas(t.el); }
+  v.tileMap.clear();
+  v.tiles.replaceChildren();
+  v.tileKey = undefined;
+}
+
 const MAX_PIXELS = 12e6;
-async function renderBase(v: PV) {
+function baseScaleFor(v: PV) {
   const dpr = window.devicePixelRatio || 1;
   const want = ptPx() * dpr;
   const cap = Math.min(Math.sqrt(MAX_PIXELS / (v.vp1.width * v.vp1.height)), 8192 / Math.max(v.vp1.width, v.vp1.height));
-  const s = Math.min(want, cap);
-  const ocg = await ocgFor(doc!, v.ref.src);
-  const hash = ocg.getHash();
-  if (v.baseScale && Math.abs(v.baseScale - s) / s < 0.05 && v.ocgHash === hash) return;
+  return Math.min(want, cap);
+}
+async function renderBase(v: PV, priority: number) {
+  const d = doc!;
+  const s = baseScaleFor(v);
+  const { hidden, shown, hash } = ocgState(d, v.ref.src);
+  if (v.baseScale && Math.abs(v.baseScale - s) / s < 0.05 && v.baseHash === hash) return;
+  if (v.baseJob && (v as any).baseWant === `${s}|${hash}`) return; // already queued
+  v.baseJob?.cancel();
   v.baseTask?.cancel();
   const vp = v.proxy.getViewport({ scale: s, rotation: v.rot });
+  const w = Math.max(1, Math.floor(vp.width)), h = Math.max(1, Math.floor(vp.height));
+  const done = (c: HTMLCanvasElement) => {
+    v.base.replaceWith(c);
+    freeCanvas(v.base);
+    v.base = c;
+    v.baseScale = s;
+    v.baseHash = hash;
+    v.el.dataset.rendered = String(+v.el.dataset.rendered! + 1 || 1);
+    if (v.tileKey) renderTiles(v);
+  };
+  if (useWorker) {
+    ensureInRenderer(v.ref.src);
+    const job = renderPage({ doc: v.ref.src, index: v.ref.index, scale: s, rotation: v.rot, width: w, height: h, hidden, shown, annotations: true, priority });
+    v.baseJob = job;
+    (v as any).baseWant = `${s}|${hash}`;
+    const bm = await job.promise;
+    if (v.baseJob !== job) { bm?.close(); return; }
+    v.baseJob = undefined;
+    if (!bm || !views.includes(v)) { bm?.close(); return; }
+    done(bitmapCanvas(bm, 'base'));
+    return;
+  }
   const c = document.createElement('canvas');
-  c.width = Math.floor(vp.width);
-  c.height = Math.floor(vp.height);
+  c.width = w;
+  c.height = h;
   c.className = 'base';
+  const ocg = await ocgFor(d, v.ref.src);
   const task = v.proxy.render({ canvas: c, viewport: vp, optionalContentConfigPromise: Promise.resolve(ocg), annotationMode: pdfjs.AnnotationMode.ENABLE });
   v.baseTask = task;
   try {
     await task.promise;
-    v.base.replaceWith(c);
-    v.base = c;
-    v.baseScale = s;
-    v.ocgHash = hash;
-    v.el.dataset.rendered = String(+v.el.dataset.rendered! + 1 || 1);
+    done(c);
   } catch (e) {
     if ((e as Error)?.name !== 'RenderingCancelledException') console.warn(e);
   }
 }
 
-async function renderDetail(v: PV) {
+/** High-zoom detail: 1024px tiles over the visible part of the page, cached while panning. */
+function renderTiles(v: PV) {
   const dpr = window.devicePixelRatio || 1;
   const want = ptPx() * dpr;
-  if (!v.baseScale || v.baseScale >= want * 0.97) {
-    v.detail.style.display = 'none';
-    v.detailKey = undefined;
-    return;
-  }
+  if (!v.baseScale || v.baseScale >= want * 0.97) { if (v.tileMap.size) clearTiles(v); return; }
+  const d = doc!;
+  const { hidden, shown, hash } = ocgState(d, v.ref.src);
+  const key = `${want.toFixed(5)}|${hash}`;
+  if (v.tileKey !== key) { clearTiles(v); v.tileKey = key; }
   const vr = viewer.getBoundingClientRect();
   const r = v.el.getBoundingClientRect();
-  const x0 = Math.max(0, vr.left - r.left), y0 = Math.max(0, vr.top - r.top);
-  const x1 = Math.min(r.width, vr.right - r.left), y1 = Math.min(r.height, vr.bottom - r.top);
+  const W = Math.floor(v.vp1.width * want), H = Math.floor(v.vp1.height * want);
+  const pad = 200;
+  const x0 = Math.max(0, vr.left - r.left - pad) * dpr, y0 = Math.max(0, vr.top - r.top - pad) * dpr;
+  const x1 = Math.min(r.width, vr.right - r.left + pad) * dpr, y1 = Math.min(r.height, vr.bottom - r.top + pad) * dpr;
   if (x1 <= x0 || y1 <= y0) return;
-  const ocg = await ocgFor(doc!, v.ref.src);
-  const key = `${want}|${Math.round(x0)}|${Math.round(y0)}|${Math.round(x1)}|${Math.round(y1)}|${ocg.getHash()}`;
-  if (key === v.detailKey) return;
-  v.detailTask?.cancel();
-  const vp = v.proxy.getViewport({ scale: want, rotation: v.rot });
-  const c = document.createElement('canvas');
-  c.width = Math.ceil((x1 - x0) * dpr);
-  c.height = Math.ceil((y1 - y0) * dpr);
-  c.className = 'detail';
-  const task = v.proxy.render({ canvas: c, viewport: vp, transform: [1, 0, 0, 1, -x0 * dpr, -y0 * dpr], optionalContentConfigPromise: Promise.resolve(ocg) });
-  v.detailTask = task;
-  try {
-    await task.promise;
-    c.style.left = `${x0}px`;
-    c.style.top = `${y0}px`;
-    c.style.width = `${x1 - x0}px`;
-    c.style.height = `${y1 - y0}px`;
-    v.detail.replaceWith(c);
-    v.detail = c;
-    v.detailKey = key;
-  } catch (e) {
-    if ((e as Error)?.name !== 'RenderingCancelledException') console.warn(e);
+  const tx0 = Math.floor(x0 / TILE), tx1 = Math.floor((x1 - 1) / TILE), ty0 = Math.floor(y0 / TILE), ty1 = Math.floor((y1 - 1) / TILE);
+  const wanted = new Set<string>();
+  // centre tiles first
+  const order: [number, number][] = [];
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) order.push([tx, ty]);
+  const cx = (tx0 + tx1) / 2, cy = (ty0 + ty1) / 2;
+  order.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
+  for (const [tx, ty] of order) {
+    const k = `${tx},${ty}`;
+    wanted.add(k);
+    if (v.tileMap.has(k)) continue;
+    const tw = Math.min(TILE, W - tx * TILE), th = Math.min(TILE, H - ty * TILE);
+    if (tw <= 0 || th <= 0) continue;
+    const ph = document.createElement('canvas');
+    const tile: Tile = { el: ph };
+    v.tileMap.set(k, tile);
+    const place = (c: HTMLCanvasElement) => {
+      c.className = 'tile';
+      c.style.left = `${(tx * TILE) / dpr}px`;
+      c.style.top = `${(ty * TILE) / dpr}px`;
+      c.style.width = `${tw / dpr}px`;
+      c.style.height = `${th / dpr}px`;
+      v.tiles.appendChild(c);
+      tile.el = c;
+    };
+    const transform = [1, 0, 0, 1, -tx * TILE, -ty * TILE];
+    if (useWorker) {
+      ensureInRenderer(v.ref.src);
+      const job = renderPage({ doc: v.ref.src, index: v.ref.index, scale: want, rotation: v.rot, width: tw, height: th, transform, hidden, shown, annotations: true, priority: 1 });
+      tile.job = job;
+      job.promise.then((bm) => {
+        if (v.tileMap.get(k) !== tile || v.tileKey !== key || !bm) { bm?.close(); return; }
+        tile.job = undefined;
+        place(bitmapCanvas(bm, 'tile'));
+      });
+    } else {
+      ph.width = tw;
+      ph.height = th;
+      const vp = v.proxy.getViewport({ scale: want, rotation: v.rot });
+      ocgFor(d, v.ref.src).then((ocg) => {
+        if (v.tileMap.get(k) !== tile) return;
+        tile.task = v.proxy.render({ canvas: ph, viewport: vp, transform, optionalContentConfigPromise: Promise.resolve(ocg) });
+        tile.task.promise.then(() => { tile.task = undefined; if (v.tileMap.get(k) === tile) place(ph); }, () => {});
+      });
+    }
+  }
+  // keep a ring of recently seen tiles for panning back; drop the rest
+  const keepR = 2;
+  for (const [k, t] of v.tileMap) {
+    if (wanted.has(k)) continue;
+    const [tx, ty] = k.split(',').map(Number);
+    if (tx < tx0 - keepR || tx > tx1 + keepR || ty < ty0 - keepR || ty > ty1 + keepR || v.tileMap.size > 60) {
+      t.job?.cancel(); t.task?.cancel(); t.el.remove(); freeCanvas(t.el);
+      v.tileMap.delete(k);
+    }
   }
 }
 
 function invalidateRender(srcId?: string) {
-  for (const v of views) if (!srcId || v.ref.src === srcId) { v.baseScale = 0; v.detailKey = undefined; }
+  for (const v of views) if (!srcId || v.ref.src === srcId) { v.baseScale = 0; v.baseHash = undefined; clearTiles(v); }
   scheduleRender(0);
   renderThumbs(true, srcId);
 }
@@ -645,7 +828,7 @@ function setZoom(z: number, anchor?: { x: number; y: number }) {
     viewer.scrollLeft += r.left + fx * r.width - ax;
     viewer.scrollTop += r.top + fy * r.height - ay;
   }
-  scheduleRender(150);
+  scheduleRenderAfterZoom();
   if (editing) positionEditor();
 }
 function fitWidth() {
@@ -668,23 +851,26 @@ function goToPage(i: number) {
 }
 function updateCurrentPage() {
   const vr = viewer.getBoundingClientRect();
-  let best = 0, bestA = -1;
-  views.forEach((v, i) => {
+  let best = currentPage < views.length ? currentPage : 0, bestA = -1;
+  for (const v of visibleViews(0)) {
     const r = v.el.getBoundingClientRect();
     const a = Math.max(0, Math.min(r.bottom, vr.bottom) - Math.max(r.top, vr.top));
-    if (a > bestA) { bestA = a; best = i; }
-  });
+    if (a > bestA) { bestA = a; best = views.indexOf(v); }
+  }
   if (best !== currentPage) {
     currentPage = best;
-    $$('.thumb').forEach((t, i) => t.classList.toggle('current', i === currentPage));
+    $('.thumb.current')?.classList.remove('current');
+    $(`.thumb[data-uid="${views[currentPage]?.ref.uid}"]`)?.classList.add('current');
     if (rightTab === 'scale') renderRight();
     updateStatus();
   }
   $<HTMLInputElement>('#page-input').value = String(views.length ? currentPage + 1 : 0);
 }
 
-viewer.addEventListener('scroll', () => scheduleRender(100), { passive: true });
+viewer.addEventListener('scroll', () => { scheduleRender(60); updateCurrentPageSoon(); }, { passive: true });
 window.addEventListener('resize', () => scheduleRender(150));
+let cpRaf = 0;
+function updateCurrentPageSoon() { if (!cpRaf) cpRaf = requestAnimationFrame(() => { cpRaf = 0; updateCurrentPage(); }); }
 viewer.addEventListener('wheel', (e) => {
   if (!e.ctrlKey && !e.metaKey) return;
   e.preventDefault();
@@ -1291,21 +1477,66 @@ function deleteSelection() {
 // ───────────────────────── left panel: pages & tool chest ─────────────────────────
 let pageSel = new Set<string>();
 let thumbObserver: IntersectionObserver | null = null;
+// Thumbnails are virtualised: every page gets a cheap placeholder, but only thumbnails near the
+// visible part of the panel are rendered, and at most MAX_THUMBS bitmaps are kept.
+const THUMB_W = 136, THUMB_H = 176, MAX_THUMBS = 90;
+interface ThumbState { job?: Job; task?: RenderTask; key?: string; visible: boolean; seen: number }
+const thumbEls = new Map<string, HTMLElement>();
+const thumbState = new WeakMap<HTMLElement, ThumbState>();
+const drawnThumbs = new Set<HTMLElement>();
+function thumbBox(i: number) {
+  const v = views[i];
+  if (!v) return { w: THUMB_W, h: Math.round(THUMB_W * 1.29) };
+  const k = Math.min(THUMB_W / v.vp1.width, THUMB_H / v.vp1.height);
+  return { w: Math.round(v.vp1.width * k), h: Math.round(v.vp1.height * k) };
+}
 function renderLeft() {
   $$('[data-lt]').forEach((b) => b.classList.toggle('active', b.dataset.lt === leftTab));
   $('#page-tools').style.display = leftTab === 'pages' && doc ? '' : 'none';
   const body = $('#left-body');
-  body.innerHTML = '';
-  if (leftTab === 'chest') return renderChest(body);
-  if (!doc) { body.innerHTML = '<p class="muted small">No document open.</p>'; return; }
-  const list = h('<div class="thumbs" id="thumbs"></div>');
-  body.appendChild(list);
+  if (leftTab === 'chest' || !doc) {
+    thumbObserver?.disconnect();
+    for (const el of thumbEls.values()) releaseThumb(el);
+    thumbEls.clear();
+    body.innerHTML = '';
+    if (leftTab === 'chest') return renderChest(body);
+    body.innerHTML = '<p class="muted small">No document open.</p>';
+    return;
+  }
+  let list = $('#thumbs', body);
+  if (!list) { body.innerHTML = ''; list = h('<div class="thumbs" id="thumbs"></div>'); body.appendChild(list); }
   thumbObserver?.disconnect();
   thumbObserver = new IntersectionObserver((ents) => {
-    for (const en of ents) if (en.isIntersecting) drawThumb(en.target as HTMLElement);
-  }, { root: body, rootMargin: '200px' });
+    for (const en of ents) {
+      const el = en.target as HTMLElement;
+      const st = thumbState.get(el);
+      if (!st) continue;
+      st.visible = en.isIntersecting;
+      st.seen = performance.now();
+      if (!en.isIntersecting) { st.job?.cancel(); st.job = undefined; }
+    }
+    queueThumbs();
+  }, { root: body, rootMargin: '400px 0px' });
+  if (!(body as any).__thumbScroll) { (body as any).__thumbScroll = true; body.addEventListener('scroll', () => queueThumbs(), { passive: true }); }
+  const keepIds = new Set(doc.pages.map((p) => p.uid));
+  for (const [id, el] of thumbEls) if (!keepIds.has(id)) { releaseThumb(el); thumbEls.delete(id); }
+  const els: HTMLElement[] = [];
   doc.pages.forEach((p, i) => {
-    const t = h(`<div class="thumb ${i === currentPage ? 'current' : ''} ${pageSel.has(p.uid) ? 'selected' : ''}" draggable="true" data-uid="${p.uid}"><canvas width="120" height="155"></canvas><div class="lbl">${i + 1}</div></div>`);
+    const box = thumbBox(i);
+    const rotKey = `${views[i]?.rot ?? 0}`;
+    let t = thumbEls.get(p.uid);
+    if (t && t.dataset.rot !== rotKey) { releaseThumb(t); t = undefined; }
+    if (!t) {
+      t = h(`<div class="thumb" draggable="true" data-uid="${p.uid}" data-rot="${rotKey}"><div class="tbox"><canvas width="0" height="0"></canvas></div><div class="lbl"></div></div>`);
+      thumbEls.set(p.uid, t);
+      thumbState.set(t, { visible: false, seen: 0 });
+    }
+    const tb = $('.tbox', t);
+    tb.style.width = `${box.w}px`;
+    tb.style.height = `${box.h}px`;
+    $('.lbl', t).textContent = String(i + 1);
+    t.classList.toggle('current', i === currentPage);
+    t.classList.toggle('selected', pageSel.has(p.uid));
     t.onclick = (e) => {
       if (e.shiftKey && pageSel.size) {
         const idx = doc!.pages.findIndex((q) => pageSel.has(q.uid));
@@ -1313,62 +1544,115 @@ function renderLeft() {
         for (let j = a; j <= b; j++) pageSel.add(doc!.pages[j].uid);
       } else if (e.ctrlKey || e.metaKey) pageSel.has(p.uid) ? pageSel.delete(p.uid) : pageSel.add(p.uid);
       else pageSel = new Set([p.uid]);
-      $$('.thumb').forEach((x) => x.classList.toggle('selected', pageSel.has(x.dataset.uid!)));
+      for (const x of thumbEls.values()) x.classList.toggle('selected', pageSel.has(x.dataset.uid!));
       goToPage(i);
     };
     t.ondragstart = (e) => {
-      if (!pageSel.has(p.uid)) { pageSel = new Set([p.uid]); $$('.thumb').forEach((x) => x.classList.toggle('selected', pageSel.has(x.dataset.uid!))); }
+      if (!pageSel.has(p.uid)) { pageSel = new Set([p.uid]); for (const x of thumbEls.values()) x.classList.toggle('selected', pageSel.has(x.dataset.uid!)); }
       e.dataTransfer!.setData('text/x-planmark-pages', [...pageSel].join(','));
       e.dataTransfer!.effectAllowed = 'move';
     };
+    const tt = t;
     t.ondragover = (e) => {
       if (!e.dataTransfer?.types.includes('text/x-planmark-pages')) return;
       e.preventDefault();
-      const r = t.getBoundingClientRect();
+      const r = tt.getBoundingClientRect();
       const after = e.clientY > r.top + r.height / 2;
-      t.classList.toggle('drop-after', after);
-      t.classList.toggle('drop-before', !after);
+      tt.classList.toggle('drop-after', after);
+      tt.classList.toggle('drop-before', !after);
     };
-    t.ondragleave = () => t.classList.remove('drop-after', 'drop-before');
+    t.ondragleave = () => tt.classList.remove('drop-after', 'drop-before');
     t.ondrop = (e) => {
       const ids = e.dataTransfer?.getData('text/x-planmark-pages');
-      t.classList.remove('drop-after', 'drop-before');
+      tt.classList.remove('drop-after', 'drop-before');
       if (!ids) return;
       e.preventDefault();
       e.stopPropagation();
-      const r = t.getBoundingClientRect();
+      const r = tt.getBoundingClientRect();
       movePages(ids.split(','), p.uid, e.clientY > r.top + r.height / 2);
     };
-    list.appendChild(t);
-    thumbObserver!.observe(t);
+    els.push(t);
   });
+  list.replaceChildren(...els);
+  for (const t of els) thumbObserver.observe(t);
+}
+
+// Thumbnails render only once the panel has settled: a fling past 200 pages should not decode
+// every map and photo on the way (each thumbnail needs the page's full-resolution images).
+let thumbTimer: ReturnType<typeof setTimeout> | undefined;
+function queueThumbs() {
+  clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(() => {
+    for (const el of thumbEls.values()) if (thumbState.get(el)?.visible) drawThumb(el);
+  }, 120);
+}
+
+function releaseThumb(el: HTMLElement) {
+  const st = thumbState.get(el);
+  st?.job?.cancel();
+  st?.task?.cancel();
+  if (st) { st.job = undefined; st.key = undefined; }
+  const c = $<HTMLCanvasElement>('canvas', el);
+  if (c && c.width) { const n = document.createElement('canvas'); n.width = n.height = 0; c.replaceWith(n); freeCanvas(c); }
+  drawnThumbs.delete(el);
 }
 
 async function drawThumb(t: HTMLElement, force = false) {
   if (!doc) return;
-  if (t.dataset.drawn && !force) return;
-  t.dataset.drawn = '1';
-  const ref = doc.pages.find((p) => p.uid === t.dataset.uid);
-  if (!ref) return;
-  const src = sources.get(ref.src)!;
-  const proxy = await src.pdf.getPage(ref.index + 1);
-  const rot = pageRot(proxy, ref);
-  const vp1 = proxy.getViewport({ scale: 1, rotation: rot });
-  const s = Math.min(120 / vp1.width, 155 / vp1.height) * (window.devicePixelRatio || 1);
-  const vp = proxy.getViewport({ scale: s, rotation: rot });
-  const c = t.querySelector('canvas')!;
-  c.width = Math.floor(vp.width);
-  c.height = Math.floor(vp.height);
-  c.style.width = `${vp.width / (window.devicePixelRatio || 1)}px`;
-  c.style.height = `${vp.height / (window.devicePixelRatio || 1)}px`;
-  try {
-    await proxy.render({ canvas: c, viewport: vp, optionalContentConfigPromise: ocgFor(doc, ref.src) }).promise;
-  } catch { /* ignore */ }
+  const st = thumbState.get(t);
+  if (!st) return;
+  const i = doc.pages.findIndex((p) => p.uid === t.dataset.uid);
+  const ref = doc.pages[i];
+  const v = views[i];
+  if (!ref || !v) return;
+  const { hidden, shown, hash } = ocgState(doc, ref.src);
+  const key = `${v.rot}|${hash}`;
+  if (!force && (st.key === key || st.job)) return;
+  st.job?.cancel();
+  st.task?.cancel();
+  const box = thumbBox(i);
+  const dpr = window.devicePixelRatio || 1;
+  const s = (box.w / v.vp1.width) * dpr;
+  const w = Math.max(1, Math.round(box.w * dpr)), hgt = Math.max(1, Math.round(box.h * dpr));
+  let canvas: HTMLCanvasElement | null = null;
+  if (useWorker) {
+    ensureInRenderer(ref.src);
+    const job = renderPage({ doc: ref.src, index: ref.index, scale: s, rotation: v.rot, width: w, height: hgt, hidden, shown, annotations: true, priority: 2 });
+    st.job = job;
+    const bm = await job.promise;
+    if (st.job !== job) { bm?.close(); return; }
+    st.job = undefined;
+    if (!bm || !t.isConnected) { bm?.close(); return; }
+    canvas = bitmapCanvas(bm, '');
+  } else {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = hgt;
+    const task = v.proxy.render({ canvas: c, viewport: v.proxy.getViewport({ scale: s, rotation: v.rot }), optionalContentConfigPromise: ocgFor(doc, ref.src) });
+    st.task = task;
+    try { await task.promise; } catch { return; }
+    st.task = undefined;
+    canvas = c;
+  }
+  const old = $<HTMLCanvasElement>('canvas', t);
+  old.replaceWith(canvas);
+  freeCanvas(old);
+  st.key = key;
+  drawnThumbs.add(t);
+  if (drawnThumbs.size > MAX_THUMBS) {
+    const off = [...drawnThumbs].filter((x) => !thumbState.get(x)?.visible).sort((a, b) => thumbState.get(a)!.seen - thumbState.get(b)!.seen);
+    for (const x of off.slice(0, drawnThumbs.size - MAX_THUMBS)) releaseThumb(x);
+  }
 }
 function renderThumbs(force: boolean, srcId?: string) {
-  for (const t of $$('.thumb')) {
+  for (const t of thumbEls.values()) {
     const ref = doc?.pages.find((p) => p.uid === t.dataset.uid);
-    if (!srcId || ref?.src === srcId) { if (force) delete t.dataset.drawn; drawThumb(t, force); }
+    if (srcId && ref?.src !== srcId) continue;
+    const st = thumbState.get(t);
+    if (!st) continue;
+    if (force) st.key = undefined;
+    if (st.visible) drawThumb(t, force);
+    else if (force) releaseThumb(t);
   }
 }
 
@@ -1407,7 +1691,7 @@ async function extractPages() {
   const sel = selectedPages();
   if (!sel.length) return;
   const d = doc;
-  const bytes = await busy('Extracting…', async () => (await exportPdf(d, sources, { flatten: false, layersAsOcg: true, pageUids: sel.map((p) => p.uid), author })).bytes);
+  const bytes = await busy('Extracting…', async () => (await exportOffThread(d, { flatten: false, layersAsOcg: true, pageUids: sel.map((p) => p.uid), author })).bytes);
   download(bytes, d.name.replace(/\.pdf$/i, '') + `_pages_${sel.map((p) => d.pages.indexOf(p) + 1).join('-')}.pdf`.slice(0, 120));
 }
 async function insertFiles(files: File[]) {
@@ -1814,9 +2098,26 @@ function openScaleDialog() {
   });
 }
 
+/** Run exportPdf in a short-lived worker (falls back to the UI thread if workers fail). */
+async function exportOffThread(d: Doc, opts: Parameters<typeof exportPdf>[2]): Promise<{ bytes: Uint8Array; pageCount: number }> {
+  if (typeof Worker === 'undefined' || /[?&]mainexport\b/.test(location.search)) return exportPdf(d, sources, opts);
+  const ids = new Set(d.pages.map((p) => p.src));
+  const srcs = [...ids].map((id) => sources.get(id)).filter(Boolean).map((s) => ({ id: s!.id, name: s!.name, bytes: s!.bytes }));
+  let w: Worker;
+  try { w = new Worker(new URL('./export-worker.ts', import.meta.url), { type: 'module' }); } catch { return exportPdf(d, sources, opts); }
+  try {
+    return await new Promise((res, rej) => {
+      w.onmessage = (e) => (e.data.ok ? res({ bytes: e.data.bytes, pageCount: e.data.pageCount }) : rej(new Error(e.data.error)));
+      w.onerror = (e) => { e.preventDefault(); rej(new Error(e.message || 'Export worker failed')); };
+      // structured clone copies the source bytes; that copy is freed with the worker
+      w.postMessage({ doc: JSON.parse(JSON.stringify(d)), sources: srcs, opts });
+    });
+  } finally {
+    w.terminate();
+  }
+}
 async function buildExport(flatten: boolean, layersAsOcg = true) {
-  const d = doc!;
-  return exportPdf(d, sources, { flatten, layersAsOcg, author });
+  return exportOffThread(doc!, { flatten, layersAsOcg, author });
 }
 async function quickSave() {
   if (!doc) return;
@@ -1857,10 +2158,10 @@ function openExportDialog() {
     let bytes = (await busy(flatten ? 'Flattening…' : 'Saving…', () => buildExport(flatten, ocg))).bytes;
     const before = bytes.length;
     if (reduce) {
-      try {
-        const r = await busy('Reducing size…', () => reduceLossless(bytes));
-        if (r.length < bytes.length) bytes = r;
-      } catch (err) { toast(`Size reduction skipped: ${(err as Error).message}`); }
+      const r = await busy('Reducing size…', () => reduceLosslessConsume(bytes));
+      if (r.error) toast(`Size reduction skipped: ${r.error}`);
+      if (!r.bytes) { toast('Size reduction failed and the file could not be recovered. Please save again without reducing.'); return; }
+      bytes = r.bytes;
     }
     await saveBytes(bytes, name, pick);
     if (!native) toast(`Saved ${name} — ${fmtBytes(bytes.length)}${reduce ? ` (was ${fmtBytes(before)})` : ''}`);
@@ -1924,23 +2225,26 @@ function openReduceDialog() {
     <table class="sizes" id="rd-table"><thead><tr><th>File</th><th>Before</th><th>After</th><th>Saved</th><th></th></tr></thead><tbody></tbody></table>
     <div class="actions"><button class="btn" data-close>Close</button></div></div>`);
   const tbody = $('#rd-table tbody', dlg);
-  const run = async (name: string, input: Uint8Array) => {
-    const row = h(`<tr><td>${esc(name)}</td><td>${fmtBytes(input.length)}</td><td colspan="3" class="muted">Working…</td></tr>`);
+  // `input` is moved into the qpdf worker (no copy); results are kept as Blobs, not JS buffers.
+  const run = async (name: string, input: Uint8Array, original?: Blob) => {
+    const size = input.length;
+    const row = h(`<tr><td>${esc(name)}</td><td>${fmtBytes(size)}</td><td colspan="3" class="muted">Working…</td></tr>`);
     tbody.appendChild(row);
-    try {
-      const out = await reduceLossless(input, { linearize: $<HTMLInputElement>('#rd-lin', dlg).checked });
-      const better = out.length < input.length;
-      const final = better ? out : input;
-      const pct = ((1 - final.length / input.length) * 100).toFixed(1);
-      row.innerHTML = `<td>${esc(name)}</td><td class="rd-before" data-bytes="${input.length}">${fmtBytes(input.length)}</td><td class="rd-after" data-bytes="${final.length}">${fmtBytes(final.length)}</td><td>${better ? `${pct}%` : 'Already optimal'}</td><td><button class="btn rd-dl">Download</button></td>`;
-      $('.rd-dl', row).onclick = () => download(final, name.replace(/\.pdf$/i, '') + (better ? '_reduced' : '') + '.pdf');
-    } catch (e) {
-      row.innerHTML = `<td>${esc(name)}</td><td>${fmtBytes(input.length)}</td><td colspan="3" style="color:var(--danger)">${esc((e as Error).message)}</td>`;
+    const r = await reduceLosslessConsume(input, { linearize: $<HTMLInputElement>('#rd-lin', dlg).checked });
+    if (r.error || !r.bytes) {
+      row.innerHTML = `<td>${esc(name)}</td><td>${fmtBytes(size)}</td><td colspan="3" style="color:var(--danger)">${esc(r.error ?? 'Failed')}</td>`;
+      return;
     }
+    const better = r.reduced;
+    const finalLen = r.bytes.length;
+    const final = better || !original ? new Blob([r.bytes as BlobPart], { type: 'application/pdf' }) : original;
+    const pct = ((1 - finalLen / size) * 100).toFixed(1);
+    row.innerHTML = `<td>${esc(name)}</td><td class="rd-before" data-bytes="${size}">${fmtBytes(size)}</td><td class="rd-after" data-bytes="${finalLen}">${fmtBytes(finalLen)}</td><td>${better ? `${pct}%` : 'Already optimal'}</td><td><button class="btn rd-dl">Download</button></td>`;
+    $('.rd-dl', row).onclick = () => download(final, name.replace(/\.pdf$/i, '') + (better ? '_reduced' : '') + '.pdf');
   };
   $('#rd-pick', dlg).onclick = () => $<HTMLInputElement>('#rd-input', dlg).click();
   $<HTMLInputElement>('#rd-input', dlg).onchange = async (e) => {
-    for (const f of [...((e.target as HTMLInputElement).files ?? [])]) await run(f.name, new Uint8Array(await f.arrayBuffer()));
+    for (const f of [...((e.target as HTMLInputElement).files ?? [])]) await run(f.name, new Uint8Array(await f.arrayBuffer()), f);
   };
   $('#rd-current', dlg)?.addEventListener('click', async () => {
     const out = await buildExport(false);
@@ -2027,7 +2331,8 @@ if ('launchQueue' in window) {
     const [vx, vy] = v.vp1.convertToViewportPoint(x, y);
     return { x: r.left + vx * ptPx(), y: r.top + vy * ptPx() };
   },
-  rendered: () => views.every((v) => !visibleViews().includes(v) || v.baseScale > 0),
+  rendered: () => visibleViews(0).every((v) => v.baseScale > 0),
+  renderStats: () => ({ ...renderQueueStats(), bases: views.filter((v) => v.baseScale > 0).length, tiles: views.reduce((n, v) => n + v.tileMap.size, 0), thumbs: drawnThumbs.size, worker: useWorker }),
   goToPage: (i: number) => goToPage(i),
   centerOn: (i: number, x: number, y: number) => {
     const v = views[i];
@@ -2039,6 +2344,11 @@ if ('launchQueue' in window) {
   setSnap: (on: boolean) => { snapOn = on; $('#btn-snap').classList.toggle('on', on); },
   textWidth,
   selection: () => [...selection],
+  close: (d: Doc) => closeDoc(d),
+  organize: (op: 'delete' | 'move', start: number, count: number, to = 0) => {
+    const ids = doc!.pages.slice(start, start + count).map((p) => p.uid);
+    if (op === 'delete') { pageSel = new Set(ids); deletePages(); } else movePages(ids, doc!.pages[to].uid, false);
+  },
 };
 
 // boot
