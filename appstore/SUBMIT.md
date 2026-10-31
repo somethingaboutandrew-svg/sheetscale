@@ -156,7 +156,7 @@ Copy everything from `appstore/METADATA.md`:
 
 - Price: **$69.99**. Add a **scheduled price change** so the first two weeks are **$49.99** (start: launch day; end: launch day + 14) and it then returns to $69.99.
 - Availability: all countries, or start with English-speaking ones.
-- Leave the Volume Purchase / Apple Business Manager discount for organisations switched on.
+- Optional: tick the volume-purchase discount (50% off for 20 or more copies bought through Apple Business Manager) to make firm-wide purchases easier.
 
 The launch-plan Page explains this price.
 
