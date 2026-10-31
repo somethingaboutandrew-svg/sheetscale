@@ -10,7 +10,7 @@ mkdirSync(OUT, { recursive: true });
 
 export async function boot(page: Page) {
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message));
-  await page.goto('/?nosw');
+  await page.goto('./?nosw');
   await page.waitForSelector('body[data-ready="1"]');
 }
 

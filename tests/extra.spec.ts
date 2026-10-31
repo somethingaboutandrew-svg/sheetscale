@@ -53,9 +53,9 @@ test('owner-password-protected PDF opens (decrypted locally with qpdf)', async (
 
 test('PWA: manifest + service worker, app reloads offline', async ({ page, context }) => {
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message));
-  await page.goto('/');
+  await page.goto('./');
   await page.waitForSelector('body[data-ready="1"]');
-  const manifest = await (await page.request.get('/manifest.webmanifest')).json();
+  const manifest = await (await page.request.get('manifest.webmanifest')).json();
   expect(manifest.display).toBe('standalone');
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload(); // now controlled by the SW
@@ -67,5 +67,9 @@ test('PWA: manifest + service worker, app reloads offline', async ({ page, conte
   await page.setInputFiles('#file-open', FIX + 'sample.pdf');
   await expect(page.locator('.page')).toHaveCount(3);
   await waitRendered(page);
+  // qpdf WebAssembly (worker + wasm) must also come from the SW cache while offline
+  await page.click('#btn-reduce');
+  await page.setInputFiles('#rd-input', FIX + 'bloated.pdf');
+  await expect(page.locator('.rd-after')).toBeVisible({ timeout: 30000 });
   await context.setOffline(false);
 });
