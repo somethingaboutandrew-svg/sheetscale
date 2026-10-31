@@ -1,7 +1,7 @@
 /* PlanMark qpdf worker. Runs qpdf (WebAssembly) entirely inside the browser. */
 importScripts('qpdf.js');
 self.onmessage = async (e) => {
-  const { id, input, args } = e.data;
+  const { id, input, args, back } = e.data;
   let out = '';
   let err = '';
   try {
@@ -21,8 +21,11 @@ self.onmessage = async (e) => {
     }
     let output = null;
     try { output = q.FS.readFile('/out.pdf'); } catch (_) { /* no output */ }
-    self.postMessage({ id, code, output, out, err }, output ? [output.buffer] : []);
+    try { q.FS.unlink('/in.pdf'); q.FS.unlink('/out.pdf'); } catch (_) { /* ignore */ }
+    const tr = output ? [output.buffer] : [];
+    if (back) tr.push(input.buffer);
+    self.postMessage({ id, code, output, input: back ? input : undefined, out, err }, tr);
   } catch (x) {
-    self.postMessage({ id, code: -1, output: null, out, err: err + String(x) });
+    self.postMessage({ id, code: -1, output: null, input: back ? input : undefined, out, err: err + String(x) }, back ? [input.buffer] : []);
   }
 };

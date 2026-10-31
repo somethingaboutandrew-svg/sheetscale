@@ -5,14 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>PlanMark</title>
   <meta name="description" content="Private PDF markup, measurement and page tools. Files never leave this device." />
-  <meta name="theme-color" content="#0f3d3a" />
+  <meta name="theme-color" content="#0B0C0F" />
+  <meta name="color-scheme" content="dark light" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="PlanMark" />
-  <script type="module" crossorigin src="./assets/index-DE0jJ-lT.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Dxd1pm3k.css">
+  <script>
+    // pick the theme before first paint so there is no flash (auto follows the system)
+    try { var m = localStorage.getItem('pm.theme') || 'auto'; document.documentElement.dataset.theme = m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : m; } catch (e) {}
+  </script>
+  <script type="module" crossorigin src="./assets/index-DCvqnXq1.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CAR4xbUq.css">
 </head>
 <body>
   <div id="app"></div>
