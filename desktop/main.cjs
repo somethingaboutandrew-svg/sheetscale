@@ -74,7 +74,19 @@ async function sendPaths(paths) {
 }
 function openPaths(paths) {
   if (rendererReady && win) sendPaths(paths);
-  else pendingPaths.push(...paths);
+  else {
+    pendingPaths.push(...paths);
+    if (!win && app.isReady()) createWindow();
+  }
+}
+
+// Bring the main window back (recreating it if the user closed it). App Review 4.0: closing the
+// main window must not leave the app without a way to reopen it.
+function showMainWindow() {
+  if (!win) { createWindow(); return; }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 }
 
 // macOS: Finder "Open With", double-click (if default) and dropping files on the dock icon
@@ -138,7 +150,16 @@ function buildMenu() {
         ...(IS_MAS ? [] : [{ role: 'toggleDevTools', accelerator: isMac ? 'Alt+Cmd+I' : 'Ctrl+Shift+I' }]),
       ],
     },
-    { role: 'windowMenu' },
+    {
+      role: 'windowMenu',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom', visible: isMac },
+        { type: 'separator' },
+        { label: 'SheetScale Main Window', accelerator: 'CmdOrCtrl+Shift+0', click: showMainWindow },
+        ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ role: 'close' }]),
+      ],
+    },
     {
       role: 'help',
       submenu: [
@@ -225,6 +246,6 @@ app.whenReady().then(() => {
   createWindow();
   const argvFiles = process.argv.slice(1).filter((a) => OPENABLE.test(a));
   if (argvFiles.length) openPaths(argvFiles);
-  app.on('activate', () => { if (!win) createWindow(); });
+  app.on('activate', () => showMainWindow());
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
