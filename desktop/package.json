@@ -1,7 +1,7 @@
 {
   "name": "sheetscale-desktop",
   "productName": "SheetScale",
-  "version": "1.2.1",
+  "version": "1.2.0",
   "description": "SheetScale - private PDF markup and measurement (desktop)",
   "author": "Andrew Pocta",
   "license": "MIT",
@@ -82,7 +82,8 @@
       "preAutoEntitlements": true,
       "artifactName": "SheetScale-${version}-mas-dev.${ext}",
       "provisioningProfile": "build/development.provisionprofile"
-    }
+    },
+    "buildVersion": "1.2.1"
   },
   "devDependencies": {
     "electron": "^45.2.1",
