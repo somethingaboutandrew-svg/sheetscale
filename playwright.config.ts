@@ -3,6 +3,7 @@ import { defineConfig } from '@playwright/test';
 const remote = process.env.PM_BASE_URL;
 export default defineConfig({
   testDir: './tests',
+  testIgnore: ['shots/**'], // App Store screenshot runs: playwright.shots.config.ts
   timeout: 120_000,
   expect: { timeout: 15_000 },
   workers: 2,

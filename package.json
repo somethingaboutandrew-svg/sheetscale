@@ -12,7 +12,8 @@
     "fixtures": "node scripts/make-fixtures.mjs",
     "test": "npm run build && npm run fixtures && node scripts/make-demo-plan.mjs && playwright test",
     "test:perf": "npm run build && node scripts/make-big-fixtures.mjs && playwright test -c playwright.perf.config.ts",
-    "test:desktop": "cd desktop && npm run dist:linux && cd .. && playwright test -c playwright.desktop.config.ts"
+    "test:desktop": "cd desktop && npm run dist:linux && cd .. && playwright test -c playwright.desktop.config.ts",
+    "shots:v2": "npm run build && node scripts/make-cad-set.mjs && node scripts/make-big-fixtures.mjs && playwright test -c playwright.shots.config.ts && python3 scripts/appstore-screenshots-v2.py"
   },
   "dependencies": {
     "@neslinesli93/qpdf-wasm": "^0.3.0",
